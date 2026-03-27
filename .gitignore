@@ -1,0 +1,30 @@
+# Logs
+*.log
+Optimizer_Log_*.txt
+
+# Temp files
+*.tmp
+*.temp
+~$*
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# PowerShell module artifacts
+*.psm1.bak
+*.psd1.bak
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.suo
+*.user
+*.sln.docstates
+
+# OS generated
+.DS_Store
+.Spotlight-V100
+.Trashes

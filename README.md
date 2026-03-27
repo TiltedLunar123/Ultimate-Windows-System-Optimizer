@@ -1,251 +1,98 @@
-# Ultimate Windows System Optimizer v3.0
+# Ultimate Windows System Optimizer
 
-Smart Windows analysis and optimization script for improving performance, reducing background bloat, tightening privacy settings, and applying system-specific tweaks based on the hardware detected.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Overview
-
-**Ultimate Windows System Optimizer v3.0** is a PowerShell script that scans a Windows system, identifies common performance and clutter issues, and applies a large set of automated optimizations.
-
-It is designed to:
-
-* analyze hardware, storage, memory, startup items, services, network settings, and privacy settings
-* score overall system health
-* apply targeted optimizations based on whether the machine is low-end, mid-range, high-end, laptop, desktop, SSD, or HDD
-* create a restore point before making changes
-* generate a detailed log on the desktop
-
-This script is meant for **advanced users, power users, and PC enthusiasts** who want a fast all-in-one Windows tuning tool.
-
----
+A PowerShell script that analyzes Windows 10/11 systems and applies intelligent, hardware-aware optimizations to improve performance, reduce bloat, harden privacy, and tighten security.
 
 ## Features
 
-### Deep system analysis
-
-The script checks:
-
-* device type: laptop or desktop
-* Windows version and build
-* CPU, GPU, RAM, uptime
-* disk free space and drive health status
-* SSD vs HDD detection
-* junk and temp file size
-* recycle bin contents
-* startup programs from registry, startup folder, and scheduled tasks
-* potentially unnecessary services
-* active power plan
-* visual effects settings
-* top memory-consuming processes
-* DNS and network configuration
-* telemetry, Cortana, advertising ID, and update status
-
-### Intelligent optimization
-
-Based on the analysis, the script can:
-
-* create a system restore point
-* clean temp files, update cache, crash dumps, thumbnails, and recycle bin
-* disable selected unnecessary services
-* optimize power settings for laptops and desktops
-* tune visual effects based on system tier
-* harden privacy settings
-* reduce tracking and suggestions in Windows
-* tweak network settings for lower latency
-* enable gaming and performance-related options
-* improve File Explorer behavior
-* apply SSD-specific tuning like TRIM and reduced write overhead
-* recommend memory/page file settings
-* disable selected scheduled tasks
-* reduce notification and background app clutter
-* apply basic security hardening
-
-### Final summary
-
-At the end, the script shows:
-
-* total fixes applied
-* estimated before/after health score
-* recommended next steps
-* path to a full log file saved on the desktop
-
----
-
-## What it changes
-
-This script makes changes to:
-
-* Windows services
-* registry values
-* power configuration
-* privacy and telemetry settings
-* scheduled tasks
-* Explorer behavior
-* gaming and network settings
-* optional Windows features
-* security-related system settings
-
-Because of that, this is **not** a harmless cosmetic script. It changes real system behavior.
-
----
+- **Deep system analysis** — detects CPU, RAM, GPU, SSD/HDD, laptop vs. desktop, and assigns a system tier (Low-End, Mid-Range, High-End)
+- **Health scoring** — calculates a 0-100 health score before and after optimization
+- **Temp file cleanup** — removes user temp, Windows temp, internet cache, update cache, crash dumps, thumbnail cache, and empties the Recycle Bin
+- **Service trimming** — disables telemetry, Xbox, fax, geolocation, and other commonly unnecessary services
+- **Power plan tuning** — activates Ultimate/High Performance on desktops; optimizes AC vs. battery profiles on laptops
+- **Visual effects optimization** — adjusts animations and effects based on system tier
+- **Privacy hardening** — disables telemetry, Cortana, advertising ID, activity history, location tracking, feedback prompts, and silent app installs
+- **Network latency reduction** — disables Nagle's algorithm, optimizes TCP settings, flushes DNS
+- **Gaming tweaks** — enables Game Mode, disables Game DVR, configures GPU scheduling, disables mouse acceleration, and tunes the multimedia scheduler
+- **Explorer improvements** — shows file extensions, disables Bing search in Start Menu, speeds up menus, opens to This PC
+- **SSD-specific tuning** — disables Prefetch/Superfetch, enables TRIM, reduces unnecessary writes
+- **Scheduled task cleanup** — disables compatibility appraiser, CEIP, disk diagnostics, maps updates, and error reporting tasks
+- **Boot optimization** — enables Fast Startup, reduces boot timeout, enables verbose boot messages
+- **Security hardening** — disables Remote Desktop, Remote Assistance, SMBv1, and AutoRun; verifies Windows Firewall is enabled
+- **Restore point creation** — automatically creates a System Restore Point before making any changes
+- **Detailed logging** — saves a timestamped log file to the desktop
 
 ## Requirements
 
-* **Windows 10 or Windows 11**
-* **PowerShell**
-* **Administrator privileges**
-* restore point support enabled if you want rollback protection
+- **Windows 10** (build 10240+) or **Windows 11**
+- **PowerShell 5.1** or later
+- **Administrator privileges** — the script must be run as admin
+- System Restore enabled (recommended, for rollback protection)
 
-The script includes:
+## Usage
 
-```powershell
-#Requires -RunAsAdministrator
-```
-
-So it must be launched as admin.
-
----
-
-## How to run
-
-1. Save the script as something like:
-   `Ultimate-Windows-System-Optimizer.ps1`
+1. Download `Ultimate-Windows-System-Optimizer.ps1`
 
 2. Open **PowerShell as Administrator**
 
-3. If needed, allow script execution for the session:
+3. Allow script execution for the current session:
 
-```powershell
-Set-ExecutionPolicy Bypass -Scope Process
-```
+   ```powershell
+   Set-ExecutionPolicy Bypass -Scope Process
+   ```
 
-4. Run the script:
+4. Navigate to the script directory and run it:
 
-```powershell
-.\Ultimate-Windows-System-Optimizer.ps1
-```
+   ```powershell
+   .\Ultimate-Windows-System-Optimizer.ps1
+   ```
 
-5. Confirm the prompts:
+5. Follow the on-screen prompts:
+   - Confirm to start analysis
+   - Review the health score and analysis results
+   - Confirm to proceed with optimization
+   - Optionally restart when complete
 
-   * start analysis
-   * proceed with optimization
-   * restart after changes
+## What the Script Modifies
 
----
-
-## Safety notes
-
-This script tries to create a **System Restore Point** before making changes, but that may fail if restore points are disabled, unavailable, or recently created.
-
-You should still treat this as a script that can significantly alter system behavior.
-
-### Read this before using it
-
-* some tweaks may disable features you actually use
-* some services marked as unnecessary may matter for your workflow
-* some gaming/network tweaks are preference-dependent, not universal miracles
-* privacy and telemetry changes may affect Microsoft features
-* disabling background apps, search behavior, or notifications can change convenience features
-* Remote Desktop, Remote Assistance, SMBv1, and other settings are modified for security reasons
-
-If you are not comfortable troubleshooting Windows, do **not** run this blindly.
-
----
-
-## Best use case
-
-This script makes the most sense for:
-
-* old or bloated Windows installs
-* gaming PCs that need cleanup and latency-focused tuning
-* laptops with too many startup/background items
-* systems with junk buildup and poor default settings
-* users who want a faster, leaner Windows setup without manually doing every tweak
-
----
-
-## Probably not ideal for
-
-This script may be a bad fit for:
-
-* production/work machines where every feature matters
-* managed school or company devices
-* systems that rely on Remote Desktop or specific Windows services
-* users who want full control over every single tweak before it happens
-* people expecting a guaranteed speed boost from every setting
-
-Some tweaks help a lot. Some are minor. Some are situational. That is the truth.
-
----
+| Category | Examples |
+|---|---|
+| Windows services | Telemetry, Xbox, Fax, Geolocation, Search Indexer, etc. |
+| Registry values | Privacy settings, visual effects, power throttling, network tuning |
+| Power configuration | Power plan selection, CPU throttle limits, USB suspend settings |
+| Scheduled tasks | Compatibility appraiser, CEIP, disk diagnostics, map updates |
+| Explorer behavior | File extensions, Quick Access, menu delay, Bing search |
+| Network settings | Nagle's algorithm, TCP acknowledgment, DNS cache, ECN |
+| Gaming settings | Game Mode, Game DVR, GPU scheduling, mouse acceleration |
+| Security settings | Remote Desktop, Remote Assistance, SMBv1, AutoRun, Firewall |
+| Optional features | Windows Media Player, Work Folders, Fax client |
+| Disk optimization | TRIM on SSDs, defrag on HDDs, temp file removal |
 
 ## Output
 
-A log file is saved to the desktop with a name like:
+A log file is saved to the desktop:
 
-```text
+```
 Optimizer_Log_YYYYMMDD_HHMMSS.txt
 ```
 
-This log contains a timestamped summary of actions, warnings, fixes, and the health score.
-
----
-
-## Example optimizations included
-
-* temp file cleanup
-* Windows Update cache cleanup
-* recycle bin cleanup
-* startup and service trimming
-* telemetry disablement
-* Cortana disablement
-* advertising ID disablement
-* Game Mode enablement
-* Game DVR disablement
-* DNS cache flush
-* Nagle-related latency tweaks
-* power throttling disablement
-* SSD TRIM support
-* file extension visibility
-* faster Explorer/menu behavior
-* notification reduction
-* background app disablement
-* firewall verification
-* AutoRun/AutoPlay disablement
-
----
-
-## Important caveats
-
-A few tweaks in scripts like this are debated in the PC tuning world. That does **not** mean the script is useless. It means you should understand that:
-
-* not every registry tweak gives a measurable performance gain
-* some network and gaming tweaks help only in certain setups
-* disabling services can be helpful or pointless depending on your machine
-* estimated “after” health score is not a benchmark, it is just a rough internal score
-
-Use this as a **practical tuning tool**, not a magic button.
-
----
+This log contains timestamped entries for every action, warning, fix, and skip that occurred during the run.
 
 ## Disclaimer
 
-Use at your own risk.
+**Use at your own risk.** This script modifies Windows settings, services, registry values, scheduled tasks, and system behavior. While it creates a restore point before making changes, there is no guarantee that every system can be restored cleanly or that every optimization is appropriate for every configuration.
 
-This script modifies Windows settings, services, registry values, scheduled tasks, and system behavior. While it attempts to create a restore point first, there is no guarantee every system can be restored cleanly or that every tweak is ideal for every user.
+Some things to keep in mind:
 
-Always review the code before running it on a machine you care about.
+- Some disabled services may be needed for your specific workflow
+- Privacy and telemetry changes may affect certain Microsoft features
+- Gaming and network tweaks are not universally beneficial
+- Disabling background apps and notifications changes convenience features
+- Remote Desktop is disabled by default for security; re-enable it if you need it
 
----
+**Always review the script before running it on a machine you depend on.**
 
 ## License
 
-Use, modify, and share at your own discretion.
-
-If you publish or distribute this project, it is smart to add a proper license file such as **MIT**.
-
----
-
-## Author note
-
-This script is built for people who want a faster, cleaner Windows setup with less manual digging through settings, services, and registry paths.
-
-It is aggressive enough to matter, but still tries to stay practical by adapting to the system it detects.
+This project is licensed under the [MIT License](LICENSE).
