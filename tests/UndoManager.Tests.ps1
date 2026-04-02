@@ -7,6 +7,7 @@ BeforeAll {
 
 Describe "Undo File Generation" {
     BeforeEach {
+        Import-Module (Join-Path $modulesPath "UndoManager.psm1") -Force -DisableNameChecking
         Clear-UndoEntries
     }
 
