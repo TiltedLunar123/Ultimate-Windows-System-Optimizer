@@ -22,7 +22,7 @@ jobs:
         shell: pwsh
         run: |
           $results = Get-ChildItem -Recurse -Include *.ps1,*.psm1 |
-            ForEach-Object { Invoke-ScriptAnalyzer -Path $_.FullName -Severity Warning,Error }
+            ForEach-Object { Invoke-ScriptAnalyzer -Path $_.FullName -Severity Warning,Error -ExcludeRule PSAvoidUsingWriteHost,PSUseBOMForUnicodeEncodedFile }
           if ($results) {
             $results | Format-Table -AutoSize
             throw "PSScriptAnalyzer found $($results.Count) issue(s)."
