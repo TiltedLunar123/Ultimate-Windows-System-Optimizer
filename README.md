@@ -39,29 +39,34 @@ A PowerShell script that analyzes Windows 10/11 systems and applies intelligent,
 - **Administrator privileges** — the script must be run as admin
 - System Restore enabled (recommended, for rollback protection)
 
-## Usage
+## Quick Start (One Command)
 
-1. Download or clone this repository
+Open **PowerShell** and paste this single command. It downloads, elevates to admin, and runs everything automatically:
 
+```powershell
+irm https://raw.githubusercontent.com/TiltedLunar123/Ultimate-Windows-System-Optimizer/main/run.ps1 | iex
+```
+
+That's it. The script will:
+1. Request administrator privileges (UAC prompt)
+2. Download the latest version
+3. Analyze your system
+4. Apply all optimizations
+5. Show before/after health scores
+6. Clean up temp files
+
+## Manual Usage
+
+If you prefer to clone and run manually:
+
+1. Clone or download this repository
 2. Open **PowerShell as Administrator**
-
-3. Allow script execution for the current session:
+3. Run:
 
    ```powershell
    Set-ExecutionPolicy Bypass -Scope Process
-   ```
-
-4. Navigate to the script directory and run it:
-
-   ```powershell
    .\Ultimate-Windows-System-Optimizer.ps1
    ```
-
-5. Follow the on-screen prompts:
-   - Confirm to start analysis
-   - Review the health score and analysis results
-   - Confirm to proceed with optimization
-   - Optionally restart when complete
 
 ## Parameters
 

@@ -210,8 +210,8 @@ function Invoke-ScheduledTasksOptimization {
             continue
         }
         try {
-            $taskPath = ($task | Split-Path -Parent).Replace("\","\")
-            $taskName = $task | Split-Path -Leaf
+            $taskPath = (Split-Path $task -Parent).TrimEnd('\') + '\'
+            $taskName = Split-Path $task -Leaf
             $t = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction SilentlyContinue
             if ($t -and $t.State -ne 'Disabled') {
                 Disable-ScheduledTask -TaskPath $t.TaskPath -TaskName $t.TaskName -ErrorAction Stop | Out-Null
