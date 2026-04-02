@@ -19,6 +19,7 @@ if (-not $isAdmin) {
     return
 }
 
+Set-ExecutionPolicy Bypass -Scope Process -Force
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
@@ -49,7 +50,7 @@ try {
     Write-Host ""
 
     $mainScript = Join-Path $scriptDir.FullName "Ultimate-Windows-System-Optimizer.ps1"
-    & $mainScript -Force
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $mainScript -Force
 
 } catch {
     Write-Host ""
