@@ -109,7 +109,7 @@ function Restore-FromUndoFile {
 }
 
 function Get-UndoEntry {
-    return $script:UndoEntries
+    return , $script:UndoEntries
 }
 
 function Clear-UndoEntry {
