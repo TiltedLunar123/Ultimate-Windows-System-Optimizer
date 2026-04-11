@@ -102,7 +102,7 @@ if ($Undo) {
 }
 
 # ── VALIDATE SECTION NAMES ──────────────────────────────────────
-$validSections = Get-ValidSections
+$validSections = Get-ValidSectionList
 if ($Only) {
     foreach ($s in $Only) {
         if ($s -notin $validSections) {
@@ -274,7 +274,7 @@ try {
     if ($os) {
         $postResults.RAMUsedPct = [math]::Round((1 - $os.FreePhysicalMemory / $os.TotalVisibleMemorySize) * 100, 1)
     }
-} catch { }
+} catch { $null = $_ }
 
 # Re-check temp file size
 $tempPaths = @("$env:TEMP", "$env:WINDIR\Temp", "$env:LOCALAPPDATA\Microsoft\Windows\INetCache")
@@ -283,13 +283,13 @@ foreach ($tp in $tempPaths) {
     if (Test-Path $tp) {
         try {
             $postTempMB += (Get-ChildItem -Path $tp -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB
-        } catch { }
+        } catch { $null = $_ }
     }
 }
 $postResults.TempSizeMB = [math]::Round($postTempMB, 1)
 
 # Re-check services
-$bloatSvcs = Get-BloatServiceDefinitions
+$bloatSvcs = Get-BloatServiceDefinition
 $postResults.ServicesToDisable = @()
 foreach ($svc in $bloatSvcs) {
     $s = Get-Service -Name $svc.Name -ErrorAction SilentlyContinue

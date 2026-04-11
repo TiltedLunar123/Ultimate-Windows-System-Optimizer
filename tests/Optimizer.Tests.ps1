@@ -37,7 +37,7 @@ Describe "Section Filtering with -Skip" {
 
 Describe "Section Filtering with neither Only nor Skip" {
     It "Should enable all sections" {
-        $validSections = Get-ValidSections
+        $validSections = Get-ValidSectionList
         foreach ($section in $validSections) {
             $result = Test-SectionEnabled -SectionName $section -Only @() -Skip @()
             $result | Should -Be $true
@@ -47,7 +47,7 @@ Describe "Section Filtering with neither Only nor Skip" {
 
 Describe "Valid Section Names" {
     It "Should contain all expected section names" {
-        $sections = Get-ValidSections
+        $sections = Get-ValidSectionList
         $sections | Should -Contain "Cleanup"
         $sections | Should -Contain "Services"
         $sections | Should -Contain "Power"
@@ -69,7 +69,7 @@ Describe "Valid Section Names" {
     }
 
     It "Should have exactly 18 sections" {
-        $sections = Get-ValidSections
+        $sections = Get-ValidSectionList
         $sections.Count | Should -Be 18
     }
 }
@@ -91,17 +91,17 @@ Describe "DryRun Mode" {
 
     It "Should not create undo entries with actual values in DryRun" {
         Set-DryRunMode $true
-        Clear-UndoEntries
+        Clear-UndoEntry
 
         # Set-RegValue in DryRun mode should save state but not modify registry
         Set-RegValue "HKCU:\Software\OptimizerDryRunTest_$(Get-Random)" "DryTest" 1
 
-        $entries = Get-UndoEntries
+        $entries = Get-UndoEntry
         # Undo entries are still saved for tracking purposes
         $entries.Count | Should -BeGreaterOrEqual 1
 
         Set-DryRunMode $false
-        Clear-UndoEntries
+        Clear-UndoEntry
     }
 }
 

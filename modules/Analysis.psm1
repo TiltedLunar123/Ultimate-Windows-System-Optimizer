@@ -160,7 +160,7 @@ function Get-SystemAnalysis {
         try {
             $wuSize = [math]::Round((Get-ChildItem $wuPath -Recurse -Force -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1MB, 1)
             Write-Info "WinUpdate Cache" "$wuSize MB"
-        } catch { }
+        } catch { $null = $_ }
     }
 
     # -- 1.4 STARTUP PROGRAMS --
@@ -220,7 +220,7 @@ function Get-SystemAnalysis {
     # -- 1.5 SERVICES ANALYSIS --
     Write-Host "`n    -- Unnecessary Services Running --" -ForegroundColor Cyan
 
-    $bloatServices = Get-BloatServiceDefinitions
+    $bloatServices = Get-BloatServiceDefinition
 
     # Smart filtering: keep SysMain on HDD-only systems
     if ($results.HasHDD -and -not $results.HasSSD) {
@@ -243,7 +243,7 @@ function Get-SystemAnalysis {
         $touchDevices = Get-PnpDevice -Class 'HIDClass' -ErrorAction SilentlyContinue |
             Where-Object { $_.FriendlyName -match 'touch screen|touch digitizer' -and $_.Status -eq 'OK' }
         $hasTouchscreen = ($null -ne $touchDevices -and @($touchDevices).Count -gt 0)
-    } catch { }
+    } catch { $null = $_ }
     if ($hasTouchscreen) {
         $bloatServices = $bloatServices | Where-Object { $_.Name -ne "TabletInputService" }
         Write-Info "Touchscreen detected" "Keeping Touch Keyboard service"

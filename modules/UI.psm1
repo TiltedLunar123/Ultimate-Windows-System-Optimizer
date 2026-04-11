@@ -83,6 +83,9 @@ function Get-Report {
 }
 
 function Reset-FixCounter {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+    if (-not $PSCmdlet.ShouldProcess("FixCounter", "Reset")) { return }
     $script:TotalFixesApplied = 0
 }
 

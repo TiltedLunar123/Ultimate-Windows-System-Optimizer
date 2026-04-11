@@ -28,7 +28,7 @@ function Save-RegistryState {
             }
         }
     } catch {
-        # Key or value doesn't exist yet - that's fine
+        $null = $_  # Key or value doesn't exist yet - that's fine
     }
 
     $script:UndoEntries.Add($entry)
@@ -108,13 +108,13 @@ function Restore-FromUndoFile {
     return ($failed -eq 0)
 }
 
-function Get-UndoEntries {
+function Get-UndoEntry {
     return $script:UndoEntries
 }
 
-function Clear-UndoEntries {
+function Clear-UndoEntry {
     $script:UndoEntries.Clear()
 }
 
 Export-ModuleMember -Function Save-RegistryState, Export-UndoFile, Restore-FromUndoFile,
-    Get-UndoEntries, Clear-UndoEntries
+    Get-UndoEntry, Clear-UndoEntry

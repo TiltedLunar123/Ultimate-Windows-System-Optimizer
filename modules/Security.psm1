@@ -3,6 +3,7 @@
 function Invoke-SecurityOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     $DryRun = Get-DryRunMode
 
     Write-Host "`n    -- Security Hardening --" -ForegroundColor Cyan
@@ -12,7 +13,7 @@ function Invoke-SecurityOptimization {
     try {
         $rdpSessions = qwinsta 2>$null | Where-Object { $_ -match 'rdp-tcp.*Active' }
         $hasActiveRDP = ($null -ne $rdpSessions -and @($rdpSessions).Count -gt 0)
-    } catch { }
+    } catch { $null = $_ }
 
     if ($hasActiveRDP) {
         Write-Warn "Active RDP session detected - skipping Remote Desktop disable"

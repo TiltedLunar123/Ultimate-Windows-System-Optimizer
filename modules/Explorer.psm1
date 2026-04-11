@@ -3,6 +3,7 @@
 function Invoke-ExplorerOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     Write-Host "`n    -- Explorer & UI Tweaks --" -ForegroundColor Cyan
 
     $advPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"

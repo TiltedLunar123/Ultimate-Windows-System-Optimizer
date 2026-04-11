@@ -8,12 +8,12 @@ BeforeAll {
 Describe "Undo File Generation" {
     BeforeEach {
         Import-Module (Join-Path $modulesPath "UndoManager.psm1") -Force -DisableNameChecking
-        Clear-UndoEntries
+        Clear-UndoEntry
     }
 
     It "Should save registry state entries" {
         Save-RegistryState -Path "HKCU:\TestPath" -Name "TestName" -NewValue 1 -Type "DWord"
-        $entries = Get-UndoEntries
+        $entries = Get-UndoEntry
         $entries.Count | Should -Be 1
         $entries[0].Path | Should -Be "HKCU:\TestPath"
         $entries[0].Name | Should -Be "TestName"
@@ -24,7 +24,7 @@ Describe "Undo File Generation" {
         Save-RegistryState -Path "HKCU:\Path1" -Name "Name1" -NewValue 1
         Save-RegistryState -Path "HKCU:\Path2" -Name "Name2" -NewValue 0
         Save-RegistryState -Path "HKCU:\Path3" -Name "Name3" -NewValue "test" -Type "String"
-        $entries = Get-UndoEntries
+        $entries = Get-UndoEntry
         $entries.Count | Should -Be 3
     }
 
@@ -50,8 +50,8 @@ Describe "Undo File Generation" {
 
     It "Should clear entries" {
         Save-RegistryState -Path "HKCU:\Path1" -Name "Name1" -NewValue 1
-        Clear-UndoEntries
-        $entries = Get-UndoEntries
+        Clear-UndoEntry
+        $entries = Get-UndoEntry
         $entries.Count | Should -Be 0
     }
 }

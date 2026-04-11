@@ -55,7 +55,10 @@ $script:FeaturesToDisable = @(
 # DryRun state - set by the entry point
 $script:DryRunMode = $false
 
-function Set-DryRunMode ([bool]$Enabled) {
+function Set-DryRunMode {
+    [CmdletBinding(SupportsShouldProcess)]
+    param([bool]$Enabled)
+    if (-not $PSCmdlet.ShouldProcess("DryRunMode", "Set to $Enabled")) { return }
     $script:DryRunMode = $Enabled
 }
 
@@ -64,6 +67,7 @@ function Get-DryRunMode {
 }
 
 function Set-RegValue {
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [string]$Path,
         [string]$Name,
@@ -89,15 +93,15 @@ function Set-RegValue {
     }
 }
 
-function Get-ValidSections {
+function Get-ValidSectionList {
     return $script:ValidSections
 }
 
-function Get-BloatServiceDefinitions {
+function Get-BloatServiceDefinition {
     return $script:BloatServiceDefinitions
 }
 
-function Get-BloatScheduledTasks {
+function Get-BloatScheduledTaskList {
     return $script:BloatScheduledTasks
 }
 
@@ -121,6 +125,6 @@ function Test-SectionEnabled {
     return $true
 }
 
-Export-ModuleMember -Function Set-RegValue, Get-ValidSections, Get-BloatServiceDefinitions,
-    Get-BloatScheduledTasks, Get-FeaturesToDisable, Test-SectionEnabled,
+Export-ModuleMember -Function Set-RegValue, Get-ValidSectionList, Get-BloatServiceDefinition,
+    Get-BloatScheduledTaskList, Get-FeaturesToDisable, Test-SectionEnabled,
     Set-DryRunMode, Get-DryRunMode

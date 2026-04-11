@@ -3,6 +3,7 @@
 function Invoke-CleanupOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     $DryRun = Get-DryRunMode
 
     Write-Host "`n    -- Cleaning Temporary Files --" -ForegroundColor Cyan

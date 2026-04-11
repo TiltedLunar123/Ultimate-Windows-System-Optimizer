@@ -3,6 +3,7 @@
 function Invoke-PrivacyOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     Write-Host "`n    -- Privacy & Telemetry Hardening --" -ForegroundColor Cyan
 
     Set-RegValue "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" 0

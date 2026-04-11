@@ -3,6 +3,7 @@
 function Invoke-NetworkOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     $DryRun = Get-DryRunMode
 
     Write-Host "`n    -- Network Optimization --" -ForegroundColor Cyan

@@ -197,11 +197,12 @@ function Invoke-MemoryOptimization {
 function Invoke-ScheduledTasksOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     $DryRun = Get-DryRunMode
 
     Write-Host "`n    -- Disabling Bloat Scheduled Tasks --" -ForegroundColor Cyan
 
-    $tasksToDisable = Get-BloatScheduledTasks
+    $tasksToDisable = Get-BloatScheduledTaskList
 
     foreach ($task in $tasksToDisable) {
         if ($DryRun) {
@@ -227,6 +228,7 @@ function Invoke-ScheduledTasksOptimization {
 function Invoke-BootOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     $DryRun = Get-DryRunMode
 
     Write-Host "`n    -- Boot Optimization --" -ForegroundColor Cyan
@@ -248,6 +250,7 @@ function Invoke-BootOptimization {
 function Invoke-BackgroundAppsOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     Write-Host "`n    -- Background Apps --" -ForegroundColor Cyan
 
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" "GlobalUserDisabled" 1
@@ -258,6 +261,7 @@ function Invoke-BackgroundAppsOptimization {
 function Invoke-NotificationsOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     Write-Host "`n    -- Notification & Distraction Cleanup --" -ForegroundColor Cyan
 
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" "RotatingLockScreenOverlayEnabled" 0
@@ -306,6 +310,7 @@ function Invoke-DiskOptimization {
 function Invoke-FeaturesOptimization {
     param([hashtable]$Analysis)
 
+    $null = $Analysis  # Used for interface consistency
     $DryRun = Get-DryRunMode
 
     Write-Host "`n    -- Disabling Unused Windows Features --" -ForegroundColor Cyan
@@ -318,7 +323,7 @@ function Invoke-FeaturesOptimization {
         $printers = Get-Printer -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -notmatch 'Microsoft|Fax|OneNote|PDF|XPS' }
         $hasPrinters = ($null -ne $printers -and @($printers).Count -gt 0)
-    } catch { }
+    } catch { $null = $_ }
 
     if ($hasPrinters) {
         $featuresToDisable = $featuresToDisable | Where-Object { $_ -ne "Printing-Foundation-Features" }
