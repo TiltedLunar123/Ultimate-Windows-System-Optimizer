@@ -154,8 +154,9 @@ Describe "Health Score Calculation" {
         $score | Should -Be 85
     }
 
-    It "Should deduct points for Balanced power plan" {
+    It "Should deduct points for Balanced power plan on a desktop" {
         $results = @{
+            IsLaptop          = $false
             RAMUsedPct        = 30
             StartupItems      = @()
             TempSizeMB        = 10
@@ -167,6 +168,38 @@ Describe "Health Score Calculation" {
         }
         $score = Get-HealthScore -AnalysisResults $results
         $score | Should -Be 90
+    }
+
+    It "Should not deduct points for Balanced power plan on a laptop" {
+        $results = @{
+            IsLaptop          = $true
+            RAMUsedPct        = 30
+            StartupItems      = @()
+            TempSizeMB        = 10
+            ServicesToDisable  = @()
+            TelemetryEnabled  = $false
+            CurrentPowerPlan   = "Balanced"
+            Disks             = @(@{ Health = "HEALTHY" })
+            VisualEffects      = "Performance"
+        }
+        $score = Get-HealthScore -AnalysisResults $results
+        $score | Should -Be 100
+    }
+
+    It "Should not deduct points for Power saver on a laptop" {
+        $results = @{
+            IsLaptop          = $true
+            RAMUsedPct        = 30
+            StartupItems      = @()
+            TempSizeMB        = 10
+            ServicesToDisable  = @()
+            TelemetryEnabled  = $false
+            CurrentPowerPlan   = "Power saver"
+            Disks             = @(@{ Health = "HEALTHY" })
+            VisualEffects      = "Performance"
+        }
+        $score = Get-HealthScore -AnalysisResults $results
+        $score | Should -Be 100
     }
 
     It "Should accumulate multiple deductions" {

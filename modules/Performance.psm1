@@ -43,12 +43,20 @@ function Invoke-PowerOptimization {
                 } elseif ($highGuid) {
                     powercfg /setactive $highGuid
                     Write-Fix "Activated High Performance power plan"
+                } else {
+                    Write-Skip "No Ultimate or High Performance power scheme available on this system"
                 }
             }
         }
 
-        Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling" "PowerThrottlingOff" 1
-        Write-Fix "Disabled power throttling"
+        # PowerThrottling key was added in 1903 (build 18362); writing it on
+        # earlier builds creates a key Windows ignores while we report success.
+        if ([int]$Analysis.OSBuild -ge 18362) {
+            Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling" "PowerThrottlingOff" 1
+            Write-Fix "Disabled power throttling"
+        } else {
+            Write-Skip "Power throttling tweak skipped (requires Windows 10 1903 or newer)"
+        }
     } catch {
         Write-Skip "Power plan optimization encountered errors"
         Log "[ERROR] Power plan: $_"
