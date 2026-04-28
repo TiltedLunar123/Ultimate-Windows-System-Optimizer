@@ -405,7 +405,11 @@ function Get-HealthScore {
 
     if ($AnalysisResults.TelemetryEnabled)       { $score -= 5 }
 
-    if ($AnalysisResults.CurrentPowerPlan -match "Balanced|Power saver") { $score -= 10 }
+    # Balanced is the recommended plan on laptops (battery life, thermals);
+    # only penalise non-performance plans on desktops.
+    if (-not $AnalysisResults.IsLaptop -and $AnalysisResults.CurrentPowerPlan -match "Balanced|Power saver") {
+        $score -= 10
+    }
 
     foreach ($d in $AnalysisResults.Disks) {
         if ($d.Health -eq "CRITICAL") { $score -= 15 }
