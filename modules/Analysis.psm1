@@ -227,10 +227,20 @@ function Get-SystemAnalysis {
         $bloatServices = $bloatServices | Where-Object { $_.Name -ne "SysMain" }
     }
 
-    # Context-aware: don't flag WSearch if Outlook is installed
-    $outlookInstalled = Test-Path "HKLM:\SOFTWARE\Microsoft\Office\*\Outlook" -ErrorAction SilentlyContinue
-    if (-not $outlookInstalled) {
-        $outlookInstalled = Test-Path "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\*\Outlook" -ErrorAction SilentlyContinue
+    # Context-aware: don't flag WSearch if Outlook is installed.
+    # Test-Path doesn't expand wildcards in registry providers, so we walk the
+    # version subkeys (15.0, 16.0, ...) and look for an Outlook child explicitly.
+    $outlookInstalled = $false
+    foreach ($officeRoot in @("HKLM:\SOFTWARE\Microsoft\Office", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office")) {
+        if (-not (Test-Path $officeRoot)) { continue }
+        $versionKeys = Get-ChildItem $officeRoot -ErrorAction SilentlyContinue
+        foreach ($vk in $versionKeys) {
+            if (Test-Path (Join-Path $vk.PSPath "Outlook")) {
+                $outlookInstalled = $true
+                break
+            }
+        }
+        if ($outlookInstalled) { break }
     }
     if ($outlookInstalled) {
         $bloatServices = $bloatServices | Where-Object { $_.Name -ne "WSearch" }
