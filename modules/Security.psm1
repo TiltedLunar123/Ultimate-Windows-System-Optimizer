@@ -8,12 +8,23 @@ function Invoke-SecurityOptimization {
 
     Write-Host "`n    -- Security Hardening --" -ForegroundColor Cyan
 
-    # Context-aware: don't disable Remote Desktop if an active RDP session is detected
+    # Context-aware: don't disable Remote Desktop if an active RDP session is
+    # detected. qwinsta output is localized (Active/Aktiv/Activo/...), so
+    # parsing it by string breaks on non-English Windows. Prefer a CIM query
+    # against Win32_LogonSession joined to Win32_LoggedOnUser, which uses
+    # numeric LogonType values (10 = RemoteInteractive). Fall back to qwinsta
+    # only if CIM fails entirely.
     $hasActiveRDP = $false
     try {
-        $rdpSessions = qwinsta 2>$null | Where-Object { $_ -match 'rdp-tcp.*Active' }
-        $hasActiveRDP = ($null -ne $rdpSessions -and @($rdpSessions).Count -gt 0)
-    } catch { $null = $_ }
+        $rdpLogons = Get-CimInstance -ClassName Win32_LogonSession -ErrorAction Stop |
+            Where-Object { $_.LogonType -eq 10 }
+        $hasActiveRDP = ($null -ne $rdpLogons -and @($rdpLogons).Count -gt 0)
+    } catch {
+        try {
+            $rdpSessions = qwinsta 2>$null | Where-Object { $_ -match '^\s*rdp-tcp\S*\s+\S+\s+\d+\s+\S+' }
+            $hasActiveRDP = ($null -ne $rdpSessions -and @($rdpSessions).Count -gt 0)
+        } catch { $null = $_ }
+    }
 
     if ($hasActiveRDP) {
         Write-Warn "Active RDP session detected - skipping Remote Desktop disable"
