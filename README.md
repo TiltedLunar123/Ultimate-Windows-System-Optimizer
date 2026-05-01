@@ -50,10 +50,11 @@ irm https://raw.githubusercontent.com/TiltedLunar123/Ultimate-Windows-System-Opt
 That's it. The script will:
 1. Request administrator privileges (UAC prompt)
 2. Download the latest version
-3. Analyze your system
-4. Apply all optimizations
-5. Show before/after health scores
-6. Clean up temp files
+3. Create a System Restore Point so changes can be rolled back
+4. Analyze your system
+5. Apply all optimizations
+6. Show before/after health scores
+7. Clean up temp files
 
 ## Manual Usage
 

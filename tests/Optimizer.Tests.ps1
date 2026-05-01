@@ -45,6 +45,44 @@ Describe "Section Filtering with neither Only nor Skip" {
     }
 }
 
+Describe "Section Filtering precedence (-Only takes priority over -Skip)" {
+    It "Should honor -Only when both -Only and -Skip are provided" {
+        # If Privacy is in both lists, Only wins and the section runs.
+        $result = Test-SectionEnabled -SectionName "Privacy" -Only @("Privacy") -Skip @("Privacy")
+        $result | Should -Be $true
+    }
+
+    It "Should still exclude sections outside -Only even if -Skip would allow them" {
+        $result = Test-SectionEnabled -SectionName "Network" -Only @("Privacy") -Skip @()
+        $result | Should -Be $false
+    }
+}
+
+Describe "Bloat lists" {
+    It "Get-BloatServiceDefinition should return well-formed entries" {
+        $services = Get-BloatServiceDefinition
+        $services | Should -Not -BeNullOrEmpty
+        foreach ($svc in $services) {
+            $svc.Name | Should -Not -BeNullOrEmpty
+            $svc.Desc | Should -Not -BeNullOrEmpty
+        }
+    }
+
+    It "Get-BloatScheduledTaskList should return non-empty task paths" {
+        $tasks = Get-BloatScheduledTaskList
+        $tasks | Should -Not -BeNullOrEmpty
+        foreach ($t in $tasks) {
+            $t | Should -Match '^\\Microsoft\\Windows\\'
+        }
+    }
+
+    It "Get-FeaturesToDisable should return a non-empty array" {
+        $features = Get-FeaturesToDisable
+        $features | Should -Not -BeNullOrEmpty
+        $features.Count | Should -BeGreaterThan 0
+    }
+}
+
 Describe "Valid Section Names" {
     It "Should contain all expected section names" {
         $sections = Get-ValidSectionList

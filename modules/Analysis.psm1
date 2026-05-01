@@ -97,13 +97,23 @@ function Get-SystemAnalysis {
         $results.Disks += @{ Drive = $vol.DeviceID; FreeGB = $freeGB; TotalGB = $totalGB; UsedPct = $usedPct; Health = $health }
     }
 
-    # Detect SSD vs HDD
-    $physDisks = Get-PhysicalDisk -ErrorAction SilentlyContinue
+    # Detect SSD vs HDD. Get-PhysicalDisk lives in the Storage module, which
+    # is missing on early Windows 10 builds (1607/1703). A missing cmdlet
+    # throws CommandNotFoundException, which is terminating and ignores
+    # -ErrorAction, so probe with Get-Command first.
+    $physDisks = $null
+    if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
+        $physDisks = Get-PhysicalDisk -ErrorAction SilentlyContinue
+    }
     $results.HasSSD = ($physDisks | Where-Object MediaType -eq 'SSD').Count -gt 0
     $results.HasHDD = ($physDisks | Where-Object MediaType -eq 'HDD').Count -gt 0
 
-    foreach ($pd in $physDisks) {
-        Write-Info "$($pd.FriendlyName)" "$($pd.MediaType) - $($pd.HealthStatus)"
+    if ($physDisks) {
+        foreach ($pd in $physDisks) {
+            Write-Info "$($pd.FriendlyName)" "$($pd.MediaType) - $($pd.HealthStatus)"
+        }
+    } else {
+        Write-Info "Physical disk detection" "skipped (Storage module unavailable)"
     }
 
     # -- 1.3 TEMP FILES ANALYSIS --

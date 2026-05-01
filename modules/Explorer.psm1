@@ -22,7 +22,7 @@ function Invoke-ExplorerOptimization {
     Set-RegValue $advPath "ShowFrequent" 0
     Write-Fix "Recent and frequent items hidden"
 
-    Set-RegValue $advPath "LaunchTo" 1
+    Set-RegValue $advPath "LaunchTo" 1 "DWord"
     Write-Fix "Explorer opens to 'This PC' - faster navigation"
 }
 
