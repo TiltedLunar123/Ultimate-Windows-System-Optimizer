@@ -143,9 +143,18 @@ function Invoke-SSDOptimization {
 
     Write-Host "`n    -- SSD Optimization --" -ForegroundColor Cyan
 
-    Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" "EnablePrefetcher" 0
-    Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" "EnableSuperfetch" 0
-    Write-Fix "Prefetch/Superfetch disabled (SSD doesn't need it)"
+    # Windows 10 1809 (build 17763) and newer detect SSDs and adapt
+    # Prefetch/Superfetch behavior automatically. Forcing them off there
+    # disables a useful cache for any HDD also present in the system and
+    # buys nothing on the SSD. Only apply the disable on older builds
+    # where the OS still treats every drive the same.
+    if ([int]$Analysis.OSBuild -lt 17763) {
+        Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" "EnablePrefetcher" 0
+        Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" "EnableSuperfetch" 0
+        Write-Fix "Prefetch/Superfetch disabled (legacy build, SSD doesn't need it)"
+    } else {
+        Write-Skip "Prefetch/Superfetch left to Windows (1809+ adapts per drive type)"
+    }
 
     if ($DryRun) {
         Write-Dry "Would disable last access timestamps"

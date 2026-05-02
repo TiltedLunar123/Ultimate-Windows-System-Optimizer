@@ -48,6 +48,9 @@ function Get-SystemAnalysis {
     }
 
     $results.IsLaptop    = ($null -ne $bat) -or ($cs.PCSystemType -eq 2)
+    # TotalVisibleMemorySize / FreePhysicalMemory are reported in KB by
+    # Win32_OperatingSystem. Dividing by the PowerShell constant 1MB
+    # (= 1,048,576) does KB -> GB in one step: KB / (KB-per-GB).
     $results.TotalRAMGB  = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
     $results.FreeRAMGB   = [math]::Round($os.FreePhysicalMemory / 1MB, 1)
     $results.RAMUsedPct  = [math]::Round((1 - $os.FreePhysicalMemory / $os.TotalVisibleMemorySize) * 100, 1)
@@ -146,13 +149,22 @@ function Get-SystemAnalysis {
     }
     $results.TempSizeMB = [math]::Round($results.TempSizeMB, 1)
 
-    # Recycle Bin
+    # Recycle Bin. Shell.Application is a COM object; if we don't release
+    # it explicitly the COM server stays loaded for the life of the
+    # process, which leaks a handle on every analysis run.
     $rbCount = 0
+    $shell = $null
     try {
-        $recycleBin = (New-Object -ComObject Shell.Application).NameSpace(0xA)
-        $rbCount = $recycleBin.Items().Count
+        $shell = New-Object -ComObject Shell.Application
+        $recycleBin = $shell.NameSpace(0xA)
+        if ($recycleBin) { $rbCount = $recycleBin.Items().Count }
     } catch {
         Log "[ERROR] Could not query Recycle Bin: $_"
+    } finally {
+        if ($shell) {
+            [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
+            $shell = $null
+        }
     }
 
     if ($results.TempSizeMB -gt 500) {
