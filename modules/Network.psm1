@@ -16,8 +16,12 @@ function Invoke-NetworkOptimization {
     Write-Fix "Nagle's algorithm disabled (lower latency)"
 
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" "NetworkThrottlingIndex" 0xFFFFFFFF
-    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" "SystemResponsiveness" 0
-    Write-Fix "Network throttling disabled"
+    # SystemResponsiveness is the % CPU MMCSS reserves for background system
+    # tasks. 0 starves audio scheduling and timer interrupts; Microsoft's
+    # guidance is 10-20%. 10 keeps gaming/network priority high without
+    # crippling background work.
+    Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" "SystemResponsiveness" 10
+    Write-Fix "Network throttling disabled (SystemResponsiveness=10)"
 
     Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "MaxCacheTtl" 86400
     Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "MaxNegativeCacheTtl" 5
