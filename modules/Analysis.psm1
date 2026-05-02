@@ -48,6 +48,9 @@ function Get-SystemAnalysis {
     }
 
     $results.IsLaptop    = ($null -ne $bat) -or ($cs.PCSystemType -eq 2)
+    # TotalVisibleMemorySize / FreePhysicalMemory are reported in KB by
+    # Win32_OperatingSystem. Dividing by the PowerShell constant 1MB
+    # (= 1,048,576) does KB -> GB in one step: KB / (KB-per-GB).
     $results.TotalRAMGB  = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
     $results.FreeRAMGB   = [math]::Round($os.FreePhysicalMemory / 1MB, 1)
     $results.RAMUsedPct  = [math]::Round((1 - $os.FreePhysicalMemory / $os.TotalVisibleMemorySize) * 100, 1)
