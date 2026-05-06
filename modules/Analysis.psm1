@@ -1,5 +1,52 @@
 # Analysis.psm1 - Phase 1: System analysis and health scoring
 
+function Get-StartupItem {
+    # Returns the union of registry Run/RunOnce entries, the user's
+    # Startup folder shortcuts, and scheduled tasks with a logon
+    # trigger. Each item is a hashtable with Name/Source/Path.
+    $items = @()
+
+    $regPaths = @(
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run",
+        "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run",
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce",
+        "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+    )
+    foreach ($rp in $regPaths) {
+        if (Test-Path $rp) {
+            $props = Get-ItemProperty $rp -ErrorAction SilentlyContinue
+            if ($props) {
+                $props.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object {
+                    $items += @{ Name = $_.Name; Source = "Registry"; Path = $_.Value }
+                }
+            }
+        }
+    }
+
+    $startupFolder = [System.IO.Path]::Combine($env:APPDATA, 'Microsoft\Windows\Start Menu\Programs\Startup')
+    if (Test-Path $startupFolder) {
+        Get-ChildItem $startupFolder -File -ErrorAction SilentlyContinue | ForEach-Object {
+            $items += @{ Name = $_.BaseName; Source = "StartupFolder"; Path = $_.FullName }
+        }
+    }
+
+    try {
+        $logonTasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
+            $_.State -ne 'Disabled' -and
+            ($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' })
+        }
+        foreach ($lt in $logonTasks) {
+            $items += @{ Name = $lt.TaskName; Source = "ScheduledTask"; Path = $lt.TaskPath }
+        }
+    } catch {
+        Log "[ERROR] Could not enumerate scheduled tasks: $_"
+    }
+
+    # Stream items so callers see a flat array via @(Get-StartupItem)
+    # rather than a 1-element wrapper that the pipeline then unwraps weirdly.
+    return $items
+}
+
 function Get-SystemAnalysis {
     Write-Section "PHASE 1: DEEP SYSTEM ANALYSIS"
 
@@ -188,43 +235,7 @@ function Get-SystemAnalysis {
     # -- 1.4 STARTUP PROGRAMS --
     Write-Host "`n    -- Startup Programs --" -ForegroundColor Cyan
 
-    $results.StartupItems = @()
-
-    $regPaths = @(
-        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run",
-        "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run",
-        "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce",
-        "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
-    )
-    foreach ($rp in $regPaths) {
-        if (Test-Path $rp) {
-            $props = Get-ItemProperty $rp -ErrorAction SilentlyContinue
-            if ($props) {
-                $props.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object {
-                    $results.StartupItems += @{ Name = $_.Name; Source = "Registry"; Path = $_.Value }
-                }
-            }
-        }
-    }
-
-    $startupFolder = [System.IO.Path]::Combine($env:APPDATA, 'Microsoft\Windows\Start Menu\Programs\Startup')
-    if (Test-Path $startupFolder) {
-        Get-ChildItem $startupFolder -File -ErrorAction SilentlyContinue | ForEach-Object {
-            $results.StartupItems += @{ Name = $_.BaseName; Source = "StartupFolder"; Path = $_.FullName }
-        }
-    }
-
-    try {
-        $logonTasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object {
-            $_.State -ne 'Disabled' -and
-            ($_.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' })
-        }
-        foreach ($lt in $logonTasks) {
-            $results.StartupItems += @{ Name = $lt.TaskName; Source = "ScheduledTask"; Path = $lt.TaskPath }
-        }
-    } catch {
-        Log "[ERROR] Could not enumerate scheduled tasks: $_"
-    }
+    $results.StartupItems = @(Get-StartupItem)
 
     $startupCount = $results.StartupItems.Count
     if ($startupCount -gt 15) {
@@ -453,4 +464,4 @@ function Get-HealthScore {
     return [math]::Max(0, [math]::Min(100, $score))
 }
 
-Export-ModuleMember -Function Get-SystemAnalysis, Get-HealthScore
+Export-ModuleMember -Function Get-SystemAnalysis, Get-HealthScore, Get-StartupItem

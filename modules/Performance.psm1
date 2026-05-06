@@ -334,17 +334,24 @@ function Invoke-FeaturesOptimization {
 
     $featuresToDisable = Get-FeaturesToDisable
 
-    # Context-aware: don't disable printing features if printers are installed
-    $hasPrinters = $false
+    # Context-aware: don't disable printing features if printers are installed.
+    # Microsoft Print to PDF and the XPS Document Writer also depend on
+    # Printing-Foundation-Features, so removing the feature kills the
+    # built-in PDF print pipeline even on machines with no physical printer.
+    $hasPhysicalPrinters = $false
+    $hasVirtualPrinters = $false
     try {
-        $printers = Get-Printer -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -notmatch 'Microsoft|Fax|OneNote|PDF|XPS' }
-        $hasPrinters = ($null -ne $printers -and @($printers).Count -gt 0)
+        $allPrinters = @(Get-Printer -ErrorAction SilentlyContinue)
+        $hasPhysicalPrinters = @($allPrinters | Where-Object { $_.Name -notmatch 'Microsoft|Fax|OneNote|PDF|XPS' }).Count -gt 0
+        $hasVirtualPrinters  = @($allPrinters | Where-Object { $_.Name -match 'Print to PDF|XPS Document Writer' }).Count -gt 0
     } catch { $null = $_ }
 
-    if ($hasPrinters) {
+    if ($hasPhysicalPrinters) {
         $featuresToDisable = $featuresToDisable | Where-Object { $_ -ne "Printing-Foundation-Features" }
         Write-Info "Printers detected" "Keeping printing features"
+    } elseif ($hasVirtualPrinters) {
+        $featuresToDisable = $featuresToDisable | Where-Object { $_ -ne "Printing-Foundation-Features" }
+        Write-Info "Print to PDF / XPS detected" "Keeping printing features"
     }
 
     foreach ($feat in $featuresToDisable) {

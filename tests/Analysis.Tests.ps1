@@ -237,3 +237,28 @@ Describe "Health Score Calculation" {
         $score | Should -BeGreaterOrEqual 0
     }
 }
+
+Describe "Get-StartupItem" {
+    It "Should be invocable and return enumerable output" {
+        $items = @(Get-StartupItem)
+        $items.GetType().IsArray | Should -Be $true
+    }
+
+    It "Each item should expose Name, Source, and Path keys" {
+        $items = @(Get-StartupItem)
+        foreach ($it in $items) {
+            $it -is [hashtable]       | Should -Be $true
+            $it.ContainsKey('Name')   | Should -Be $true
+            $it.ContainsKey('Source') | Should -Be $true
+            $it.ContainsKey('Path')   | Should -Be $true
+        }
+    }
+
+    It "Source values should be one of the known origins" {
+        $items = @(Get-StartupItem)
+        $valid = @('Registry', 'StartupFolder', 'ScheduledTask')
+        foreach ($it in $items) {
+            $valid | Should -Contain $it.Source
+        }
+    }
+}

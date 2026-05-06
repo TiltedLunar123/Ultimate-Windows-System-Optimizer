@@ -78,7 +78,15 @@ function Invoke-CleanupOptimization {
             }
         }
         try {
-            Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:100" -WindowStyle Hidden -ErrorAction SilentlyContinue
+            # /sagerun:100 must complete before downstream phases reanalyze
+            # disk state. Cap the wait at 10 minutes so a stuck cleanmgr
+            # doesn't hang the whole run; on locked-down installs it has.
+            $proc = Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/sagerun:100" -WindowStyle Hidden -PassThru -ErrorAction Stop
+            if (-not $proc.WaitForExit(600000)) {
+                try { $proc.Kill() } catch { $null = $_ }
+                Write-Skip "Disk Cleanup timed out after 10 minutes"
+                Log "[WARN] cleanmgr.exe killed after 10-minute timeout"
+            }
         } catch {
             Log "[ERROR] Disk Cleanup utility failed to start: $_"
         }
