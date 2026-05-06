@@ -237,3 +237,29 @@ Describe "Health Score Calculation" {
         $score | Should -BeGreaterOrEqual 0
     }
 }
+
+Describe "Get-StartupItem" {
+    It "Should return an array (possibly empty)" {
+        $items = Get-StartupItem
+        # Force-wrap so a 0- or 1-element collection still tests as array.
+        @($items) | Should -BeOfType [System.Object]
+        @($items).GetType().IsArray -or @($items) -is [System.Collections.IEnumerable] | Should -Be $true
+    }
+
+    It "Each item should expose Name, Source, and Path keys" {
+        $items = @(Get-StartupItem)
+        foreach ($it in $items) {
+            $it.ContainsKey('Name')   | Should -Be $true
+            $it.ContainsKey('Source') | Should -Be $true
+            $it.ContainsKey('Path')   | Should -Be $true
+        }
+    }
+
+    It "Source values should be one of the known origins" {
+        $items = @(Get-StartupItem)
+        $valid = @('Registry', 'StartupFolder', 'ScheduledTask')
+        foreach ($it in $items) {
+            $valid | Should -Contain $it.Source
+        }
+    }
+}
