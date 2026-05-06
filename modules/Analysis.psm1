@@ -42,7 +42,9 @@ function Get-StartupItem {
         Log "[ERROR] Could not enumerate scheduled tasks: $_"
     }
 
-    return ,$items
+    # Stream items so callers see a flat array via @(Get-StartupItem)
+    # rather than a 1-element wrapper that the pipeline then unwraps weirdly.
+    return $items
 }
 
 function Get-SystemAnalysis {
@@ -233,7 +235,7 @@ function Get-SystemAnalysis {
     # -- 1.4 STARTUP PROGRAMS --
     Write-Host "`n    -- Startup Programs --" -ForegroundColor Cyan
 
-    $results.StartupItems = Get-StartupItem
+    $results.StartupItems = @(Get-StartupItem)
 
     $startupCount = $results.StartupItems.Count
     if ($startupCount -gt 15) {

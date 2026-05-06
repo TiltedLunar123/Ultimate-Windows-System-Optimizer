@@ -239,16 +239,15 @@ Describe "Health Score Calculation" {
 }
 
 Describe "Get-StartupItem" {
-    It "Should return an array (possibly empty)" {
-        $items = Get-StartupItem
-        # Force-wrap so a 0- or 1-element collection still tests as array.
-        @($items) | Should -BeOfType [System.Object]
-        @($items).GetType().IsArray -or @($items) -is [System.Collections.IEnumerable] | Should -Be $true
+    It "Should be invocable and return enumerable output" {
+        $items = @(Get-StartupItem)
+        $items.GetType().IsArray | Should -Be $true
     }
 
     It "Each item should expose Name, Source, and Path keys" {
         $items = @(Get-StartupItem)
         foreach ($it in $items) {
+            $it -is [hashtable]       | Should -Be $true
             $it.ContainsKey('Name')   | Should -Be $true
             $it.ContainsKey('Source') | Should -Be $true
             $it.ContainsKey('Path')   | Should -Be $true
