@@ -259,7 +259,7 @@ Write-Section "PHASE 3: OPTIMIZATION COMPLETE"
 # Re-analyze to get actual post-optimization score
 $postResults = @{
     RAMUsedPct        = $analysisResults.RAMUsedPct
-    StartupItems      = $analysisResults.StartupItems
+    StartupItems      = Get-StartupItem
     TempSizeMB        = 0  # temp files cleaned
     ServicesToDisable  = @()
     TelemetryEnabled  = $false
