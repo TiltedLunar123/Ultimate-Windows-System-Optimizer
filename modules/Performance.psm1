@@ -296,29 +296,56 @@ function Invoke-DiskOptimization {
 
     Write-Host "`n    -- Disk Optimization --" -ForegroundColor Cyan
 
+    # Iterate every fixed volume with a drive letter. The previous
+    # implementation hardcoded C:, which silently skipped multi-drive
+    # systems (e.g. Windows on D:, secondary HDD on E:). Optimize-Volume
+    # -ReTrim is a safe no-op on non-SSD media, and defrag.exe with the
+    # arguments split (rather than crammed into one quoted string) is
+    # what the docs actually expect.
+    $fixedVolumes = @()
+    if (Get-Command Get-Volume -ErrorAction SilentlyContinue) {
+        try {
+            $fixedVolumes = @(Get-Volume -ErrorAction Stop |
+                Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter })
+        } catch {
+            $fixedVolumes = @()
+        }
+    }
+
+    if (-not $fixedVolumes) {
+        Write-Skip "No fixed volumes with a drive letter detected"
+        return
+    }
+
     if ($Analysis.HasSSD) {
         if ($DryRun) {
-            Write-Dry "Would run TRIM on SSD"
+            Write-Dry ("Would run TRIM on fixed volumes: " + (($fixedVolumes | ForEach-Object { "$($_.DriveLetter):" }) -join ', '))
         } else {
-            Write-Host "      Running TRIM on SSDs..." -ForegroundColor DarkGray
-            try {
-                Optimize-Volume -DriveLetter C -ReTrim -ErrorAction Stop
-                Write-Fix "TRIM executed on SSD"
-            } catch {
-                Write-Skip "Could not run TRIM on SSD"
+            foreach ($vol in $fixedVolumes) {
+                $letter = $vol.DriveLetter
+                Write-Host "      Running TRIM on ${letter}: ..." -ForegroundColor DarkGray
+                try {
+                    Optimize-Volume -DriveLetter $letter -ReTrim -ErrorAction Stop
+                    Write-Fix "TRIM executed on ${letter}:"
+                } catch {
+                    Write-Skip "Could not run TRIM on ${letter}:"
+                }
             }
         }
     }
     if ($Analysis.HasHDD) {
         if ($DryRun) {
-            Write-Dry "Would start HDD defragmentation"
+            Write-Dry ("Would start HDD defragmentation on fixed volumes: " + (($fixedVolumes | ForEach-Object { "$($_.DriveLetter):" }) -join ', '))
         } else {
-            Write-Host "      HDD defrag will run in background..." -ForegroundColor DarkGray
-            try {
-                Start-Process -FilePath "defrag.exe" -ArgumentList "C: /O /U" -WindowStyle Hidden -ErrorAction Stop
-                Write-Fix "HDD defragmentation started in background"
-            } catch {
-                Write-Skip "Could not start HDD defragmentation"
+            foreach ($vol in $fixedVolumes) {
+                $letter = $vol.DriveLetter
+                Write-Host "      Defrag will run in background on ${letter}: ..." -ForegroundColor DarkGray
+                try {
+                    Start-Process -FilePath "defrag.exe" -ArgumentList "${letter}:", "/O", "/U" -WindowStyle Hidden -ErrorAction Stop
+                    Write-Fix "HDD defragmentation started on ${letter}:"
+                } catch {
+                    Write-Skip "Could not start HDD defragmentation on ${letter}:"
+                }
             }
         }
     }
