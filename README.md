@@ -99,7 +99,7 @@ If you prefer to clone and run manually:
 .\Ultimate-Windows-System-Optimizer.ps1 -Skip "Security"
 
 # Restore from undo file:
-.\Ultimate-Windows-System-Optimizer.ps1 -Undo "C:\Users\you\Desktop\undo_20260329_120000.json"
+.\Ultimate-Windows-System-Optimizer.ps1 -Undo "$env:LOCALAPPDATA\UWSO\undo_20260329_120000.json"
 ```
 
 ## Modules
@@ -147,7 +147,7 @@ Each optimization module exports a single `Invoke-*Optimization` function. The a
 
 ## Output
 
-A log file is saved to the desktop:
+A log file is saved under `%LOCALAPPDATA%\UWSO\` (with fallback to `%TEMP%`, then the user's Desktop if neither is writable):
 
 ```
 Optimizer_Log_YYYYMMDD_HHMMSS.txt
@@ -155,13 +155,13 @@ Optimizer_Log_YYYYMMDD_HHMMSS.txt
 
 This log contains timestamped entries for every action, warning, fix, and skip that occurred during the run.
 
-An undo file is also saved to the desktop after optimization:
+An undo file is written to the same directory after optimization:
 
 ```
 undo_YYYYMMDD_HHMMSS.json
 ```
 
-This JSON file records the previous value of every registry key that was modified, allowing full rollback with the `-Undo` parameter.
+This JSON file records the previous value of every registry key that was modified, allowing full rollback with the `-Undo` parameter. The file's ACL is tightened after write so only the current user can read it (the JSON contains enough configuration detail that it shouldn't be world-readable on a shared machine).
 
 ## Disclaimer
 
