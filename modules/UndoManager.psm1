@@ -36,11 +36,19 @@ function Save-RegistryState {
 
 function Export-UndoFile {
     param(
-        [string]$OutputDir = "$env:USERPROFILE\Desktop"
+        [string]$OutputDir
     )
 
     if ($script:UndoEntries.Count -eq 0) {
         return $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+        if (Get-Command Get-OptimizerDataDir -ErrorAction SilentlyContinue) {
+            $OutputDir = Get-OptimizerDataDir
+        } else {
+            $OutputDir = $env:TEMP
+        }
     }
 
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
@@ -61,7 +69,41 @@ function Export-UndoFile {
     }
 
     $exportData | ConvertTo-Json -Depth 5 | Out-File -FilePath $filePath -Encoding UTF8 -Force
+    Set-UndoFileAcl -FilePath $filePath
     return $filePath
+}
+
+function Set-UndoFileAcl {
+    # Lock the undo JSON down to the current user. The file lists every
+    # registry path the optimizer touched, which is enough system-config
+    # detail that it shouldn't be world-readable on a shared machine.
+    # Failure to set the ACL is logged, not fatal - the file still
+    # exists and the optimization run is otherwise complete.
+    [CmdletBinding(SupportsShouldProcess)]
+    param([string]$FilePath)
+
+    if (-not (Test-Path -LiteralPath $FilePath)) { return }
+    if (-not $PSCmdlet.ShouldProcess($FilePath, "Restrict ACL to current user")) { return }
+
+    try {
+        $acl = Get-Acl -LiteralPath $FilePath
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @($acl.Access)) {
+            [void]$acl.RemoveAccessRule($rule)
+        }
+        $userSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $userSid,
+            [System.Security.AccessControl.FileSystemRights]::FullControl,
+            [System.Security.AccessControl.AccessControlType]::Allow
+        )
+        $acl.AddAccessRule($rule)
+        Set-Acl -LiteralPath $FilePath -AclObject $acl
+    } catch {
+        if (Get-Command Log -ErrorAction SilentlyContinue) {
+            Log "[WARN] Could not restrict ACL on undo file '$FilePath': $_"
+        }
+    }
 }
 
 function Restore-FromUndoFile {
@@ -117,4 +159,4 @@ function Clear-UndoEntry {
 }
 
 Export-ModuleMember -Function Save-RegistryState, Export-UndoFile, Restore-FromUndoFile,
-    Get-UndoEntry, Clear-UndoEntry
+    Get-UndoEntry, Clear-UndoEntry, Set-UndoFileAcl

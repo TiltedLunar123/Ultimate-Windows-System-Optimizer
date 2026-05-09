@@ -10,7 +10,8 @@
     tweaks, Explorer improvements, SSD-specific tuning, and security hardening.
 
     The script creates a System Restore Point before making any changes and generates
-    a timestamped log file on the desktop.
+    a timestamped log file in %LOCALAPPDATA%\UWSO (with fallback to %TEMP% then Desktop
+    if that path isn't writable).
 
 .PARAMETER Only
     Run only the specified optimization sections. Valid values: Cleanup, Services, Power,
@@ -34,7 +35,7 @@
     Author       : TiltedLunar123
     Requires     : Windows 10 or 11, PowerShell 5.1+, Administrator privileges
     Restore Point: Created automatically before optimization begins
-    Log File     : Saved to Desktop as Optimizer_Log_YYYYMMDD_HHMMSS.txt
+    Log File     : Optimizer_Log_YYYYMMDD_HHMMSS.txt under %LOCALAPPDATA%\UWSO
 
 .EXAMPLE
     # Run all optimizations:
@@ -69,7 +70,6 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 $ProgressPreference    = 'SilentlyContinue'
-$LogFile = "$env:USERPROFILE\Desktop\Optimizer_Log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
 $RestorePoint = $true
 
 # ── IMPORT MODULES ──────────────────────────────────────────────
@@ -85,6 +85,11 @@ Import-Module (Join-Path $modulesPath "Network.psm1")    -Force -DisableNameChec
 Import-Module (Join-Path $modulesPath "Performance.psm1") -Force -DisableNameChecking
 Import-Module (Join-Path $modulesPath "Security.psm1")   -Force -DisableNameChecking
 Import-Module (Join-Path $modulesPath "Explorer.psm1")   -Force -DisableNameChecking
+
+# Log path is resolved after Config.psm1 is loaded so we can use the
+# data-dir helper. Desktop is unreliable on enterprise configs (folder
+# redirected to a network share, marked read-only, or absent entirely).
+$LogFile = Join-Path (Get-OptimizerDataDir) ("Optimizer_Log_" + (Get-Date -Format 'yyyyMMdd_HHmmss') + ".txt")
 
 # ── UNDO MODE ───────────────────────────────────────────────────
 if ($Undo) {
