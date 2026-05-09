@@ -155,3 +155,32 @@ Describe "UI Functions" {
         $report | Should -Not -BeNullOrEmpty
     }
 }
+
+Describe "Get-OptimizerDataDir" {
+    It "Should return a non-empty path" {
+        $dir = Get-OptimizerDataDir
+        $dir | Should -Not -BeNullOrEmpty
+    }
+
+    It "Should return a path that exists on disk" {
+        $dir = Get-OptimizerDataDir
+        Test-Path -LiteralPath $dir | Should -Be $true
+    }
+
+    It "Should return a writable directory" {
+        $dir = Get-OptimizerDataDir
+        $probe = Join-Path $dir (".uwso_test_probe_" + [Guid]::NewGuid().ToString('N'))
+        { Set-Content -LiteralPath $probe -Value 'x' -ErrorAction Stop } | Should -Not -Throw
+        Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+    }
+
+    It "Should prefer LOCALAPPDATA\\UWSO when that path is writable" {
+        if (-not $env:LOCALAPPDATA) {
+            Set-ItResult -Skipped -Because "LOCALAPPDATA not set in this environment"
+            return
+        }
+        $expected = Join-Path $env:LOCALAPPDATA 'UWSO'
+        $dir = Get-OptimizerDataDir
+        $dir | Should -Be $expected
+    }
+}

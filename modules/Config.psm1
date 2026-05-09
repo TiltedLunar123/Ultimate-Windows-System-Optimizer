@@ -66,6 +66,41 @@ function Get-DryRunMode {
     return $script:DryRunMode
 }
 
+function Get-OptimizerDataDir {
+    # Returns a writable directory for optimizer artifacts (log, undo
+    # JSON). Prefers $env:LOCALAPPDATA\UWSO because NTFS ACLs already
+    # restrict it to the current user. Falls back to $env:TEMP, then the
+    # user's Desktop as a last resort. Verifies write access by touching
+    # a probe file before returning - covers redirected-to-readonly
+    # Desktop, full TEMP volumes, etc.
+    $candidates = @()
+    if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA 'UWSO') }
+    if ($env:TEMP)         { $candidates += $env:TEMP }
+    if ($env:USERPROFILE)  { $candidates += (Join-Path $env:USERPROFILE 'Desktop') }
+
+    foreach ($dir in $candidates) {
+        if ([string]::IsNullOrWhiteSpace($dir)) { continue }
+        try {
+            if (-not (Test-Path -LiteralPath $dir)) {
+                New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null
+            }
+            $probe = Join-Path $dir (".uwso_probe_" + [Guid]::NewGuid().ToString('N'))
+            Set-Content -LiteralPath $probe -Value 'probe' -ErrorAction Stop
+            Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+            return $dir
+        } catch {
+            continue
+        }
+    }
+
+    # Every candidate failed - return the first non-empty so callers
+    # have a path to surface in their own error messages.
+    foreach ($dir in $candidates) {
+        if (-not [string]::IsNullOrWhiteSpace($dir)) { return $dir }
+    }
+    return $env:TEMP
+}
+
 function Set-RegValue {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -127,4 +162,4 @@ function Test-SectionEnabled {
 
 Export-ModuleMember -Function Set-RegValue, Get-ValidSectionList, Get-BloatServiceDefinition,
     Get-BloatScheduledTaskList, Get-FeaturesToDisable, Test-SectionEnabled,
-    Set-DryRunMode, Get-DryRunMode
+    Set-DryRunMode, Get-DryRunMode, Get-OptimizerDataDir
