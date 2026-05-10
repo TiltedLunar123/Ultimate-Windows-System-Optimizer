@@ -5,38 +5,34 @@
 
 A PowerShell script that analyzes Windows 10/11 systems and applies intelligent, hardware-aware optimizations to improve performance, reduce bloat, harden privacy, and tighten security.
 
-## Screenshots
-
-<!-- Screenshots coming soon -->
-
 ## Features
 
-- **Deep system analysis** — detects CPU, RAM, GPU, SSD/HDD, laptop vs. desktop, and assigns a system tier (Low-End, Mid-Range, High-End)
-- **Health scoring** — calculates a real 0-100 health score before and after optimization
-- **Temp file cleanup** — removes user temp, Windows temp, internet cache, update cache, crash dumps, thumbnail cache, and empties the Recycle Bin
-- **Service trimming** — disables telemetry, Xbox, fax, geolocation, and other commonly unnecessary services
-- **Power plan tuning** — activates Ultimate/High Performance on desktops; optimizes AC vs. battery profiles on laptops
-- **Visual effects optimization** — adjusts animations and effects based on system tier
-- **Privacy hardening** — disables telemetry, Cortana, advertising ID, activity history, location tracking, feedback prompts, and silent app installs
-- **Network latency reduction** — disables Nagle's algorithm, optimizes TCP settings, flushes DNS
-- **Gaming tweaks** — enables Game Mode, disables Game DVR, configures GPU scheduling, disables mouse acceleration, and tunes the multimedia scheduler
-- **Explorer improvements** — shows file extensions, disables Bing search in Start Menu, speeds up menus, opens to This PC
-- **SSD-specific tuning** — disables Prefetch/Superfetch, enables TRIM, reduces unnecessary writes
-- **Scheduled task cleanup** — disables compatibility appraiser, CEIP, disk diagnostics, maps updates, and error reporting tasks
-- **Boot optimization** — enables Fast Startup, reduces boot timeout, enables verbose boot messages
-- **Security hardening** — disables Remote Desktop, Remote Assistance, SMBv1, and AutoRun; verifies Windows Firewall is enabled
-- **Context-aware safety** — skips changes that would break detected hardware or active sessions (Outlook, RDP, printers, touchscreens)
-- **Undo/rollback** — exports all registry changes to a JSON file that can restore previous values
-- **Dry run mode** — preview all changes without modifying anything
-- **Selective optimization** — run only specific sections or skip sections you don't want
-- **Restore point creation** — automatically creates a System Restore Point before making any changes
-- **Detailed logging** — saves a timestamped log file to the desktop
+- **Deep system analysis** - detects CPU, RAM, GPU, SSD/HDD, laptop vs. desktop, and assigns a system tier (Low-End, Mid-Range, High-End)
+- **Health scoring** - calculates a real 0-100 health score before and after optimization
+- **Temp file cleanup** - removes user temp, Windows temp, internet cache, update cache, crash dumps, thumbnail cache, and empties the Recycle Bin
+- **Service trimming** - disables telemetry, Xbox, fax, geolocation, and other commonly unnecessary services
+- **Power plan tuning** - activates Ultimate/High Performance on desktops; optimizes AC vs. battery profiles on laptops
+- **Visual effects optimization** - adjusts animations and effects based on system tier
+- **Privacy hardening** - disables telemetry, Cortana, advertising ID, activity history, location tracking, feedback prompts, and silent app installs
+- **Network latency reduction** - disables Nagle's algorithm, optimizes TCP settings, flushes DNS
+- **Gaming tweaks** - enables Game Mode, disables Game DVR, configures GPU scheduling, disables mouse acceleration, and tunes the multimedia scheduler
+- **Explorer improvements** - shows file extensions, disables Bing search in Start Menu, speeds up menus, opens to This PC
+- **SSD-specific tuning** - disables Prefetch/Superfetch, enables TRIM, reduces unnecessary writes
+- **Scheduled task cleanup** - disables compatibility appraiser, CEIP, disk diagnostics, maps updates, and error reporting tasks
+- **Boot optimization** - enables Fast Startup, reduces boot timeout, enables verbose boot messages
+- **Security hardening** - disables Remote Desktop, Remote Assistance, SMBv1, and AutoRun; verifies Windows Firewall is enabled
+- **Context-aware safety** - skips changes that would break detected hardware or active sessions (Outlook, RDP, printers, touchscreens)
+- **Undo/rollback** - exports all registry changes to a JSON file that can restore previous values
+- **Dry run mode** - preview all changes without modifying anything
+- **Selective optimization** - run only specific sections or skip sections you don't want
+- **Restore point creation** - automatically creates a System Restore Point before making any changes
+- **Detailed logging** - saves a timestamped log file to the desktop
 
 ## Requirements
 
 - **Windows 10** (build 10240+) or **Windows 11**
 - **PowerShell 5.1** or later
-- **Administrator privileges** — the script must be run as admin
+- **Administrator privileges** - the script must be run as admin
 - System Restore enabled (recommended, for rollback protection)
 
 ## Quick Start (One Command)
