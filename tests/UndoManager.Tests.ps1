@@ -83,4 +83,66 @@ Describe "Undo File Restore" {
         # Cleanup
         Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
     }
+
+    It "Should preserve the registry value type when restoring (String stays String)" {
+        $testPath = "HKCU:\Software\UWSOTestRestore_$(Get-Random)"
+        $tempFile = Join-Path $env:TEMP "test_undo_type_$(Get-Random).json"
+
+        # Pre-create a String value so Existed = true and OldValue is the string.
+        New-Item -Path $testPath -Force | Out-Null
+        Set-ItemProperty -Path $testPath -Name "MyVal" -Value "original" -Type String -Force
+
+        $data = @(
+            @{
+                Path     = $testPath
+                Name     = "MyVal"
+                NewValue = "changed"
+                OldValue = "original"
+                Type     = "String"
+                Existed  = $true
+                IsBase64 = $false
+            }
+        )
+        $data | ConvertTo-Json -Depth 5 | Out-File $tempFile -Encoding UTF8
+
+        # Simulate optimizer overwriting it as a different type.
+        Set-ItemProperty -Path $testPath -Name "MyVal" -Value 0 -Type DWord -Force
+
+        Restore-FromUndoFile -FilePath $tempFile | Out-Null
+
+        $kind = (Get-Item -Path $testPath).GetValueKind("MyVal")
+        $kind | Should -Be "String"
+        (Get-ItemProperty -Path $testPath -Name "MyVal")."MyVal" | Should -Be "original"
+
+        Remove-Item -Path $testPath -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+    }
+
+    It "Should default to DWord when an older undo file has no Type field" {
+        $testPath = "HKCU:\Software\UWSOTestRestore_$(Get-Random)"
+        $tempFile = Join-Path $env:TEMP "test_undo_legacy_$(Get-Random).json"
+
+        New-Item -Path $testPath -Force | Out-Null
+
+        # Legacy entry: no Type field at all.
+        $data = @(
+            [pscustomobject]@{
+                Path     = $testPath
+                Name     = "LegacyVal"
+                NewValue = 1
+                OldValue = 0
+                Existed  = $true
+                IsBase64 = $false
+            }
+        )
+        $data | ConvertTo-Json -Depth 5 | Out-File $tempFile -Encoding UTF8
+
+        Restore-FromUndoFile -FilePath $tempFile | Out-Null
+
+        $kind = (Get-Item -Path $testPath).GetValueKind("LegacyVal")
+        $kind | Should -Be "DWord"
+
+        Remove-Item -Path $testPath -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+    }
 }
