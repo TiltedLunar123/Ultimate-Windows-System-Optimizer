@@ -216,3 +216,46 @@ Describe "Explorer DryRun output" {
     }
 }
 
+Describe "Set-RegValue path validation" {
+    # Issue #13: Set-RegValue would create keys at any path string. Reject
+    # anything not under a standard hive prefix so a bad caller can't
+    # scatter keys around the registry.
+    BeforeEach {
+        Set-DryRunMode $true
+        Clear-UndoEntry
+    }
+
+    AfterAll {
+        Set-DryRunMode $false
+    }
+
+    It "Should accept HKCU: paths" {
+        $result = Set-RegValue "HKCU:\Software\UWSOValidationTest_$(Get-Random)" "X" 1
+        $result | Should -Be $true
+    }
+
+    It "Should accept HKLM: paths" {
+        $result = Set-RegValue "HKLM:\Software\UWSOValidationTest_$(Get-Random)" "X" 1
+        $result | Should -Be $true
+    }
+
+    It "Should accept HKCR: paths" {
+        $result = Set-RegValue "HKCR:\UWSOValidationTest_$(Get-Random)" "X" 1
+        $result | Should -Be $true
+    }
+
+    It "Should reject paths without a hive prefix" {
+        $result = Set-RegValue "Software\UWSOBadPath" "X" 1
+        $result | Should -Be $false
+    }
+
+    It "Should reject paths with a bogus PSDrive prefix" {
+        $result = Set-RegValue "Foo:\Bar" "X" 1
+        $result | Should -Be $false
+    }
+
+    It "Should reject empty or whitespace paths" {
+        (Set-RegValue "" "X" 1)  | Should -Be $false
+        (Set-RegValue "   " "X" 1) | Should -Be $false
+    }
+}

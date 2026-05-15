@@ -101,6 +101,28 @@ function Get-OptimizerDataDir {
     return $env:TEMP
 }
 
+# Hive prefixes Set-RegValue is allowed to touch. Anything else is
+# almost certainly a typo or a bug in the caller, and silently creating
+# arbitrary registry keys is exactly the kind of thing this script
+# should never do. Kept narrow on purpose; add a prefix here if a
+# legitimate need shows up.
+$script:AllowedRegHives = @(
+    'HKCU:\', 'HKLM:\', 'HKCR:\', 'HKU:\', 'HKCC:\'
+)
+
+function Test-RegPathAllowed {
+    [CmdletBinding()]
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    foreach ($prefix in $script:AllowedRegHives) {
+        if ($Path.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Set-RegValue {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -109,6 +131,13 @@ function Set-RegValue {
         $Value,
         [string]$Type = "DWord"
     )
+
+    if (-not (Test-RegPathAllowed -Path $Path)) {
+        if (Get-Command Log -ErrorAction SilentlyContinue) {
+            Log "[ERROR] Rejected registry path '$Path' - must start with one of: $($script:AllowedRegHives -join ', ')"
+        }
+        return $false
+    }
 
     # Save state for undo before making changes
     Save-RegistryState -Path $Path -Name $Name -NewValue $Value -Type $Type
@@ -162,4 +191,4 @@ function Test-SectionEnabled {
 
 Export-ModuleMember -Function Set-RegValue, Get-ValidSectionList, Get-BloatServiceDefinition,
     Get-BloatScheduledTaskList, Get-FeaturesToDisable, Test-SectionEnabled,
-    Set-DryRunMode, Get-DryRunMode, Get-OptimizerDataDir
+    Set-DryRunMode, Get-DryRunMode, Get-OptimizerDataDir, Test-RegPathAllowed
