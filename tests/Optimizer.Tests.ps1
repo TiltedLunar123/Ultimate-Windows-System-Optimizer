@@ -4,6 +4,7 @@ BeforeAll {
     Import-Module (Join-Path $modulesPath "UndoManager.psm1") -Force -DisableNameChecking
     Import-Module (Join-Path $modulesPath "Config.psm1")      -Force -DisableNameChecking
     Import-Module (Join-Path $modulesPath "Analysis.psm1")    -Force -DisableNameChecking
+    Import-Module (Join-Path $modulesPath "Explorer.psm1")    -Force -DisableNameChecking
 }
 
 Describe "Section Filtering with -Only" {
@@ -182,5 +183,79 @@ Describe "Get-OptimizerDataDir" {
         $expected = Join-Path $env:LOCALAPPDATA 'UWSO'
         $dir = Get-OptimizerDataDir
         $dir | Should -Be $expected
+    }
+}
+
+Describe "Explorer DryRun output" {
+    # Issue #7: every [FIX] line was firing even in DryRun, on top of the
+    # [DRY] line that Set-RegValue already emits. Make sure the fix
+    # counter doesn't move when DryRun is on.
+    BeforeEach {
+        Reset-FixCounter
+        Clear-UndoEntry
+    }
+
+    It "Should not increment fix counter during Invoke-ExplorerOptimization in DryRun" {
+        Set-DryRunMode $true
+        try {
+            Invoke-ExplorerOptimization -Analysis @{ OSBuild = 22000 } | Out-Null
+            Get-FixCount | Should -Be 0
+        } finally {
+            Set-DryRunMode $false
+        }
+    }
+
+    It "Should not increment fix counter during Invoke-ContextMenuOptimization in DryRun" {
+        Set-DryRunMode $true
+        try {
+            Invoke-ContextMenuOptimization -Analysis @{ OSBuild = 22000 } | Out-Null
+            Get-FixCount | Should -Be 0
+        } finally {
+            Set-DryRunMode $false
+        }
+    }
+}
+
+Describe "Set-RegValue path validation" {
+    # Issue #13: Set-RegValue would create keys at any path string. Reject
+    # anything not under a standard hive prefix so a bad caller can't
+    # scatter keys around the registry.
+    BeforeEach {
+        Set-DryRunMode $true
+        Clear-UndoEntry
+    }
+
+    AfterAll {
+        Set-DryRunMode $false
+    }
+
+    It "Should accept HKCU: paths" {
+        $result = Set-RegValue "HKCU:\Software\UWSOValidationTest_$(Get-Random)" "X" 1
+        $result | Should -Be $true
+    }
+
+    It "Should accept HKLM: paths" {
+        $result = Set-RegValue "HKLM:\Software\UWSOValidationTest_$(Get-Random)" "X" 1
+        $result | Should -Be $true
+    }
+
+    It "Should accept HKCR: paths" {
+        $result = Set-RegValue "HKCR:\UWSOValidationTest_$(Get-Random)" "X" 1
+        $result | Should -Be $true
+    }
+
+    It "Should reject paths without a hive prefix" {
+        $result = Set-RegValue "Software\UWSOBadPath" "X" 1
+        $result | Should -Be $false
+    }
+
+    It "Should reject paths with a bogus PSDrive prefix" {
+        $result = Set-RegValue "Foo:\Bar" "X" 1
+        $result | Should -Be $false
+    }
+
+    It "Should reject empty or whitespace paths" {
+        (Set-RegValue "" "X" 1)  | Should -Be $false
+        (Set-RegValue "   " "X" 1) | Should -Be $false
     }
 }

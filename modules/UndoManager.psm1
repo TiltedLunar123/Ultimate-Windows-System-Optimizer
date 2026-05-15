@@ -130,7 +130,9 @@ function Restore-FromUndoFile {
                 if (-not (Test-Path $entry.Path)) {
                     New-Item -Path $entry.Path -Force | Out-Null
                 }
-                Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $value -Force
+                # Older undo files (pre-Type field) default to DWord.
+                $type = if ($entry.PSObject.Properties['Type'] -and $entry.Type) { $entry.Type } else { 'DWord' }
+                Set-ItemProperty -Path $entry.Path -Name $entry.Name -Value $value -Type $type -Force
                 $restored++
             } else {
                 # Value didn't exist before, remove it

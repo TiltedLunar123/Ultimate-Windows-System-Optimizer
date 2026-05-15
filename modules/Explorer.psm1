@@ -7,23 +7,24 @@ function Invoke-ExplorerOptimization {
     Write-Host "`n    -- Explorer & UI Tweaks --" -ForegroundColor Cyan
 
     $advPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    $isDry = Get-DryRunMode
 
     Set-RegValue $advPath "HideFileExt" 0
-    Write-Fix "File extensions now visible"
+    if (-not $isDry) { Write-Fix "File extensions now visible" }
 
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "BingSearchEnabled" 0
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "CortanaConsent" 0
-    Write-Fix "Web search in Start Menu disabled"
+    if (-not $isDry) { Write-Fix "Web search in Start Menu disabled" }
 
     Set-RegValue "HKCU:\Control Panel\Desktop" "MenuShowDelay" "50" "String"
-    Write-Fix "Menu animations sped up"
+    if (-not $isDry) { Write-Fix "Menu animations sped up" }
 
     Set-RegValue $advPath "ShowRecent" 0
     Set-RegValue $advPath "ShowFrequent" 0
-    Write-Fix "Recent and frequent items hidden"
+    if (-not $isDry) { Write-Fix "Recent and frequent items hidden" }
 
     Set-RegValue $advPath "LaunchTo" 1 "DWord"
-    Write-Fix "Explorer opens to 'This PC' - faster navigation"
+    if (-not $isDry) { Write-Fix "Explorer opens to 'This PC' - faster navigation" }
 }
 
 function Invoke-ContextMenuOptimization {
@@ -31,9 +32,11 @@ function Invoke-ContextMenuOptimization {
 
     Write-Host "`n    -- Shell & Context Menu Tweaks --" -ForegroundColor Cyan
 
+    $isDry = Get-DryRunMode
+
     if ([int]$Analysis.OSBuild -ge 22000) {
         $ctxPath = "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
-        if (Get-DryRunMode) {
+        if ($isDry) {
             Write-Dry "Would restore classic right-click context menu"
         } else {
             try {
@@ -47,7 +50,7 @@ function Invoke-ContextMenuOptimization {
         }
     }
 
-    Write-Fix "Context menu cleaned"
+    if (-not $isDry) { Write-Fix "Context menu cleaned" }
 }
 
 Export-ModuleMember -Function Invoke-ExplorerOptimization, Invoke-ContextMenuOptimization
