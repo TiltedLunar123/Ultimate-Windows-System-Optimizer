@@ -50,6 +50,11 @@ enhancement issues and adds presets, a JSON report, and richer undo.
   JSON and fails gracefully instead of throwing.
 - External tool failures (`fsutil`, `netsh`, `bcdedit`) are reported as skips
   rather than false successes.
+- Stray `True` console output is suppressed (the boolean `Set-RegValue` returns
+  no longer leaks to the screen during a run).
+- The post-optimization telemetry/visual-effects re-checks no longer throw
+  `PropertyNotFoundStrict` under `Set-StrictMode` when the value is absent
+  (surfaced by a real elevated run).
 
 ### Changed
 - **Windows Search Indexer (WSearch) is no longer disabled by default** (#20):
