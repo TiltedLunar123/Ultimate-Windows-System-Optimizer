@@ -37,7 +37,7 @@ function Invoke-NetworkOptimization {
     }
 
     if ($applied -gt 0) {
-        Write-Fix "Nagle's algorithm disabled on $applied physical adapter(s)"
+        if (-not $DryRun) { Write-Fix "Nagle's algorithm disabled on $applied physical adapter(s)" }
     } else {
         Write-Skip "No eligible physical adapters; skipped Nagle tuning"
     }
@@ -48,7 +48,7 @@ function Invoke-NetworkOptimization {
     # guidance is 10-20%. 10 keeps gaming/network priority high without
     # crippling background work.
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" "SystemResponsiveness" 10
-    Write-Fix "Network throttling disabled (SystemResponsiveness=10)"
+    if (-not $DryRun) { Write-Fix "Network throttling disabled (SystemResponsiveness=10)" }
 
     Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "MaxCacheTtl" 86400
     Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "MaxNegativeCacheTtl" 5
@@ -65,8 +65,14 @@ function Invoke-NetworkOptimization {
         }
 
         netsh int tcp set global autotuninglevel=normal 2>&1 | Out-Null
+        $autotuneOk = ($LASTEXITCODE -eq 0)
         netsh int tcp set global ecncapability=enabled 2>&1 | Out-Null
-        Write-Fix "TCP auto-tuning and ECN optimized"
+        $ecnOk = ($LASTEXITCODE -eq 0)
+        if ($autotuneOk -and $ecnOk) {
+            Write-Fix "TCP auto-tuning and ECN optimized"
+        } else {
+            Write-Skip "Some TCP global settings could not be applied (netsh reported an error)"
+        }
     }
 }
 

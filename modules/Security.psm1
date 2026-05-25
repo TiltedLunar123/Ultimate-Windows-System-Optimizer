@@ -30,14 +30,14 @@ function Invoke-SecurityOptimization {
         Write-Warn "Active RDP session detected - skipping Remote Desktop disable"
     } else {
         Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 1
-        Write-Fix "Remote Desktop disabled (security)"
+        if (-not $DryRun) { Write-Fix "Remote Desktop disabled (security)" }
     }
 
     Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Remote Assistance" "fAllowToGetHelp" 0
-    Write-Fix "Remote Assistance disabled"
+    if (-not $DryRun) { Write-Fix "Remote Assistance disabled" }
 
     Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" "SMB1" 0
-    Write-Fix "SMBv1 disabled (security)"
+    if (-not $DryRun) { Write-Fix "SMBv1 disabled (security)" }
 
     if ($DryRun) {
         Write-Dry "Would verify Windows Firewall is enabled"
@@ -52,7 +52,7 @@ function Invoke-SecurityOptimization {
 
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" "NoDriveTypeAutoRun" 255
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers" "DisableAutoplay" 1
-    Write-Fix "AutoRun/AutoPlay disabled (prevents USB malware)"
+    if (-not $DryRun) { Write-Fix "AutoRun/AutoPlay disabled (prevents USB malware)" }
 }
 
 Export-ModuleMember -Function Invoke-SecurityOptimization

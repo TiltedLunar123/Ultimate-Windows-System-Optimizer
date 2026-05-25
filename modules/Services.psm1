@@ -14,6 +14,7 @@ function Invoke-ServicesOptimization {
                 continue
             }
             try {
+                Save-ServiceState -Name $svc.Name
                 Stop-Service -Name $svc.Name -Force -ErrorAction Stop
                 Set-Service -Name $svc.Name -StartupType Disabled -ErrorAction Stop
                 Write-Fix "Disabled: $($svc.Desc)"

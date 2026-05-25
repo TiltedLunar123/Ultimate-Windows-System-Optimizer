@@ -42,9 +42,30 @@ function Get-StartupItem {
         Log "[ERROR] Could not enumerate scheduled tasks: $_"
     }
 
-    # Stream items so callers see a flat array via @(Get-StartupItem)
-    # rather than a 1-element wrapper that the pipeline then unwraps weirdly.
+    # Callers wrap with @(Get-StartupItem); Get-HealthScore also coerces with
+    # @() before reading .Count, so a 0/1-item result is handled safely.
     return $items
+}
+
+function Get-SystemTier {
+    # Pure tier classification, extracted so it can be unit-tested directly
+    # rather than re-implemented inside the tests.
+    param([double]$RamGB, [int]$Cores)
+
+    if ($RamGB -ge 16 -and $Cores -ge 6) { return "High-End" }
+    elseif ($RamGB -ge 8 -and $Cores -ge 4) { return "Mid-Range" }
+    else { return "Low-End" }
+}
+
+function Get-PowerPlanName {
+    # Extract the active plan name from `powercfg /getactivescheme`. Modern
+    # Windows prints it in parentheses ("... (High performance)"); older
+    # builds used double quotes. Accept both, else return "Unknown".
+    param([string]$PowerCfgOutput)
+
+    if ($PowerCfgOutput -match '\(([^)]+)\)') { return $Matches[1] }
+    if ($PowerCfgOutput -match '"([^"]+)"')   { return $Matches[1] }
+    return "Unknown"
 }
 
 function Get-SystemAnalysis {
@@ -118,13 +139,7 @@ function Get-SystemAnalysis {
     Write-Info "Uptime"             "$([math]::Round(((Get-Date) - $os.LastBootUpTime).TotalHours, 1)) hours"
 
     # Categorize system tier
-    if ($results.TotalRAMGB -ge 16 -and $results.CPUCores -ge 6) {
-        $results.SystemTier = "High-End"
-    } elseif ($results.TotalRAMGB -ge 8 -and $results.CPUCores -ge 4) {
-        $results.SystemTier = "Mid-Range"
-    } else {
-        $results.SystemTier = "Low-End"
-    }
+    $results.SystemTier = Get-SystemTier -RamGB $results.TotalRAMGB -Cores $results.CPUCores
     Write-Info "System Tier"  $results.SystemTier
 
     # -- 1.2 DISK ANALYSIS --
@@ -260,25 +275,9 @@ function Get-SystemAnalysis {
         $bloatServices = $bloatServices | Where-Object { $_.Name -ne "SysMain" }
     }
 
-    # Context-aware: don't flag WSearch if Outlook is installed.
-    # Test-Path doesn't expand wildcards in registry providers, so we walk the
-    # version subkeys (15.0, 16.0, ...) and look for an Outlook child explicitly.
-    $outlookInstalled = $false
-    foreach ($officeRoot in @("HKLM:\SOFTWARE\Microsoft\Office", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office")) {
-        if (-not (Test-Path $officeRoot)) { continue }
-        $versionKeys = Get-ChildItem $officeRoot -ErrorAction SilentlyContinue
-        foreach ($vk in $versionKeys) {
-            if (Test-Path (Join-Path $vk.PSPath "Outlook")) {
-                $outlookInstalled = $true
-                break
-            }
-        }
-        if ($outlookInstalled) { break }
-    }
-    if ($outlookInstalled) {
-        $bloatServices = $bloatServices | Where-Object { $_.Name -ne "WSearch" }
-        Write-Info "Outlook detected" "Keeping Windows Search Indexer"
-    }
+    # WSearch (Windows Search Indexer) is intentionally NOT in the bloat list:
+    # Start Menu search, File Explorer search, Outlook, Teams, and OneNote all
+    # depend on it, so disabling it degrades core UX for most users (see #20).
 
     # Context-aware: don't flag TabletInputService if touchscreen detected
     $hasTouchscreen = $false
@@ -310,7 +309,7 @@ function Get-SystemAnalysis {
     Write-Host "`n    -- Power Configuration --" -ForegroundColor Cyan
 
     $activePlan = powercfg /getactivescheme
-    $results.CurrentPowerPlan = if ($activePlan -match '"([^"]+)"') { $Matches[1] } else { "Unknown" }
+    $results.CurrentPowerPlan = Get-PowerPlanName (($activePlan | Out-String))
     Write-Info "Active Power Plan" $results.CurrentPowerPlan
 
     if ($results.CurrentPowerPlan -match "Balanced|Power saver") {
@@ -431,37 +430,51 @@ function Get-HealthScore {
         [hashtable]$AnalysisResults
     )
 
+    $r = $AnalysisResults
     $score = 100
 
-    if ($AnalysisResults.RAMUsedPct -gt 85)      { $score -= 15 }
-    elseif ($AnalysisResults.RAMUsedPct -gt 70)  { $score -= 5 }
+    # Read every input defensively: callers (e.g. the post-optimization
+    # re-score) may pass a hashtable that omits some keys, and StrictMode in
+    # a future refactor would otherwise turn a missing key into a crash.
+    $ramPct       = if ($r.ContainsKey('RAMUsedPct'))       { [double]$r.RAMUsedPct } else { 0 }
+    $tempMB       = if ($r.ContainsKey('TempSizeMB'))       { [double]$r.TempSizeMB } else { 0 }
+    $telemetry    = if ($r.ContainsKey('TelemetryEnabled')) { [bool]$r.TelemetryEnabled } else { $false }
+    $isLaptop     = if ($r.ContainsKey('IsLaptop'))         { [bool]$r.IsLaptop } else { $false }
+    $powerPlan    = if ($r.ContainsKey('CurrentPowerPlan')) { "$($r.CurrentPowerPlan)" } else { "" }
+    $visualFx     = if ($r.ContainsKey('VisualEffects'))    { "$($r.VisualEffects)" } else { "" }
+    $startupCount = if ($r.ContainsKey('StartupItems') -and $r.StartupItems) { @($r.StartupItems).Count } else { 0 }
+    $svcCount     = if ($r.ContainsKey('ServicesToDisable') -and $r.ServicesToDisable) { @($r.ServicesToDisable).Count } else { 0 }
+    $disks        = if ($r.ContainsKey('Disks') -and $r.Disks) { @($r.Disks) } else { @() }
 
-    $startupCount = $AnalysisResults.StartupItems.Count
-    if ($startupCount -gt 15)           { $score -= 15 }
-    elseif ($startupCount -gt 8)        { $score -= 8 }
+    if ($ramPct -gt 85)      { $score -= 15 }
+    elseif ($ramPct -gt 70)  { $score -= 5 }
 
-    if ($AnalysisResults.TempSizeMB -gt 500)     { $score -= 10 }
-    elseif ($AnalysisResults.TempSizeMB -gt 100) { $score -= 5 }
+    if ($startupCount -gt 15)    { $score -= 15 }
+    elseif ($startupCount -gt 8) { $score -= 8 }
 
-    if ($AnalysisResults.ServicesToDisable.Count -gt 5) { $score -= 10 }
-    elseif ($AnalysisResults.ServicesToDisable.Count -gt 0) { $score -= 5 }
+    if ($tempMB -gt 500)     { $score -= 10 }
+    elseif ($tempMB -gt 100) { $score -= 5 }
 
-    if ($AnalysisResults.TelemetryEnabled)       { $score -= 5 }
+    if ($svcCount -gt 5)     { $score -= 10 }
+    elseif ($svcCount -gt 0) { $score -= 5 }
+
+    if ($telemetry)          { $score -= 5 }
 
     # Balanced is the recommended plan on laptops (battery life, thermals);
     # only penalise non-performance plans on desktops.
-    if (-not $AnalysisResults.IsLaptop -and $AnalysisResults.CurrentPowerPlan -match "Balanced|Power saver") {
+    if (-not $isLaptop -and $powerPlan -match "Balanced|Power saver") {
         $score -= 10
     }
 
-    foreach ($d in $AnalysisResults.Disks) {
+    foreach ($d in $disks) {
         if ($d.Health -eq "CRITICAL") { $score -= 15 }
         elseif ($d.Health -eq "WARNING") { $score -= 8 }
     }
 
-    if ($AnalysisResults.VisualEffects -eq "Auto") { $score -= 5 }
+    if ($visualFx -eq "Auto") { $score -= 5 }
 
     return [math]::Max(0, [math]::Min(100, $score))
 }
 
-Export-ModuleMember -Function Get-SystemAnalysis, Get-HealthScore, Get-StartupItem
+Export-ModuleMember -Function Get-SystemAnalysis, Get-HealthScore, Get-StartupItem,
+    Get-SystemTier, Get-PowerPlanName

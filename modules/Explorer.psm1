@@ -34,12 +34,17 @@ function Invoke-ContextMenuOptimization {
 
     $isDry = Get-DryRunMode
 
-    if ([int]$Analysis.OSBuild -ge 22000) {
-        $ctxPath = "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
+    if ((Get-OSBuildNumber $Analysis.OSBuild) -ge 22000) {
+        # The classic menu is triggered by the mere presence of this CLSID
+        # key, so record the key for undo (Save-RegistryKeyState removes a
+        # key we created on rollback - value-level undo can't).
+        $clsidKey = "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}"
+        $ctxPath  = "$clsidKey\InprocServer32"
         if ($isDry) {
             Write-Dry "Would restore classic right-click context menu"
         } else {
             try {
+                Save-RegistryKeyState -Path $clsidKey
                 if (-not (Test-Path $ctxPath)) { New-Item -Path $ctxPath -Force | Out-Null }
                 Set-ItemProperty -Path $ctxPath -Name "(Default)" -Value "" -Force
                 Write-Fix "Classic right-click context menu restored (Windows 11)"
@@ -48,9 +53,9 @@ function Invoke-ContextMenuOptimization {
                 Log "[ERROR] Context menu restore: $_"
             }
         }
+    } else {
+        Write-Skip "Classic context menu tweak skipped (Windows 11 only)"
     }
-
-    if (-not $isDry) { Write-Fix "Context menu cleaned" }
 }
 
 Export-ModuleMember -Function Invoke-ExplorerOptimization, Invoke-ContextMenuOptimization

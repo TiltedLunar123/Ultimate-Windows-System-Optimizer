@@ -51,9 +51,9 @@ function Invoke-PowerOptimization {
 
         # PowerThrottling key was added in 1903 (build 18362); writing it on
         # earlier builds creates a key Windows ignores while we report success.
-        if ([int]$Analysis.OSBuild -ge 18362) {
+        if ((Get-OSBuildNumber $Analysis.OSBuild) -ge 18362) {
             Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling" "PowerThrottlingOff" 1
-            Write-Fix "Disabled power throttling"
+            if (-not $DryRun) { Write-Fix "Disabled power throttling" }
         } else {
             Write-Skip "Power throttling tweak skipped (requires Windows 10 1903 or newer)"
         }
@@ -65,6 +65,8 @@ function Invoke-PowerOptimization {
 
 function Invoke-VisualEffectsOptimization {
     param([hashtable]$Analysis)
+
+    $DryRun = Get-DryRunMode
 
     Write-Host "`n    -- Visual Effects Optimization --" -ForegroundColor Cyan
 
@@ -81,7 +83,7 @@ function Invoke-VisualEffectsOptimization {
         Set-RegValue $advPath "TaskbarAnimations" 0
         Set-RegValue $dwmPath "EnableAeroPeek" 0
         Set-RegValue "HKCU:\Control Panel\Desktop" "DragFullWindows" "0" "String"
-        Write-Fix "Visual effects set to MAXIMUM PERFORMANCE (Low-End system)"
+        if (-not $DryRun) { Write-Fix "Visual effects set to MAXIMUM PERFORMANCE (Low-End system)" }
     } elseif ($Analysis.SystemTier -eq "Mid-Range") {
         Set-RegValue $vePath "VisualFXSetting" 3
         Set-RegValue "HKCU:\Control Panel\Desktop" "FontSmoothing" "2" "String"
@@ -90,48 +92,50 @@ function Invoke-VisualEffectsOptimization {
         Set-RegValue $advPath "TaskbarAnimations" 0
         Set-RegValue $dwmPath "EnableAeroPeek" 0
         Set-RegValue "HKCU:\Control Panel\Desktop" "DragFullWindows" "1" "String"
-        Write-Fix "Visual effects optimized for balanced quality/performance"
+        if (-not $DryRun) { Write-Fix "Visual effects optimized for balanced quality/performance" }
     } else {
         Set-RegValue "HKCU:\Control Panel\Desktop\WindowMetrics" "MinAnimate" "0" "String"
         Set-RegValue $advPath "TaskbarAnimations" 0
-        Write-Fix "Visual effects: minimal tweaks (High-End system - keeping quality)"
+        if (-not $DryRun) { Write-Fix "Visual effects: minimal tweaks (High-End system - keeping quality)" }
     }
 }
 
 function Invoke-PerformanceOptimization {
     param([hashtable]$Analysis)
 
+    $DryRun = Get-DryRunMode
+
     Write-Host "`n    -- Performance Tweaks --" -ForegroundColor Cyan
 
     Set-RegValue "HKCU:\Software\Microsoft\GameBar" "AllowAutoGameMode" 1
     Set-RegValue "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" 1
-    Write-Fix "Game Mode enabled"
+    if (-not $DryRun) { Write-Fix "Game Mode enabled" }
 
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR" "AppCaptureEnabled" 0
     Set-RegValue "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 0
     Set-RegValue "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowGameDVR" 0
-    Write-Fix "Game Bar / DVR capture disabled (reduces overhead)"
+    if (-not $DryRun) { Write-Fix "Game Bar / DVR capture disabled (reduces overhead)" }
 
     Set-RegValue "HKCU:\System\GameConfigStore" "GameDVR_FSEBehaviorMode" 2
     Set-RegValue "HKCU:\System\GameConfigStore" "GameDVR_HonorUserFSEBehaviorMode" 1
     Set-RegValue "HKCU:\System\GameConfigStore" "GameDVR_FSEBehavior" 2
-    Write-Fix "Fullscreen optimizations configured"
+    if (-not $DryRun) { Write-Fix "Fullscreen optimizations configured" }
 
-    if ([int]$Analysis.OSBuild -ge 19041) {
+    if ((Get-OSBuildNumber $Analysis.OSBuild) -ge 19041) {
         Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" "HwSchMode" 2
-        Write-Fix "Hardware-accelerated GPU scheduling enabled"
+        if (-not $DryRun) { Write-Fix "Hardware-accelerated GPU scheduling enabled" }
     }
 
     Set-RegValue "HKCU:\Control Panel\Mouse" "MouseSpeed" "0" "String"
     Set-RegValue "HKCU:\Control Panel\Mouse" "MouseThreshold1" "0" "String"
     Set-RegValue "HKCU:\Control Panel\Mouse" "MouseThreshold2" "0" "String"
-    Write-Fix "Mouse acceleration disabled (1:1 precision)"
+    if (-not $DryRun) { Write-Fix "Mouse acceleration disabled (1:1 precision)" }
 
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" "GPU Priority" 8
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" "Priority" 6
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" "Scheduling Category" "High" "String"
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" "SFIO Priority" "High" "String"
-    Write-Fix "Multimedia scheduler optimized for games"
+    if (-not $DryRun) { Write-Fix "Multimedia scheduler optimized for games" }
 }
 
 function Invoke-SSDOptimization {
@@ -148,10 +152,10 @@ function Invoke-SSDOptimization {
     # disables a useful cache for any HDD also present in the system and
     # buys nothing on the SSD. Only apply the disable on older builds
     # where the OS still treats every drive the same.
-    if ([int]$Analysis.OSBuild -lt 17763) {
+    if ((Get-OSBuildNumber $Analysis.OSBuild) -lt 17763) {
         Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" "EnablePrefetcher" 0
         Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" "EnableSuperfetch" 0
-        Write-Fix "Prefetch/Superfetch disabled (legacy build, SSD doesn't need it)"
+        if (-not $DryRun) { Write-Fix "Prefetch/Superfetch disabled (legacy build, SSD doesn't need it)" }
     } else {
         Write-Skip "Prefetch/Superfetch left to Windows (1809+ adapts per drive type)"
     }
@@ -161,10 +165,18 @@ function Invoke-SSDOptimization {
         Write-Dry "Would enable TRIM for SSD"
     } else {
         fsutil behavior set disablelastaccess 1 2>&1 | Out-Null
-        Write-Fix "Last access timestamps disabled (reduces SSD writes)"
+        if ($LASTEXITCODE -eq 0) {
+            Write-Fix "Last access timestamps disabled (reduces SSD writes)"
+        } else {
+            Write-Skip "Could not change last-access behavior (fsutil exit $LASTEXITCODE)"
+        }
 
         fsutil behavior set disabledeletenotify 0 2>&1 | Out-Null
-        Write-Fix "TRIM enabled for SSD"
+        if ($LASTEXITCODE -eq 0) {
+            Write-Fix "TRIM enabled for SSD"
+        } else {
+            Write-Skip "Could not enable TRIM (fsutil exit $LASTEXITCODE)"
+        }
     }
 
     Write-Good "SSD optimization complete"
@@ -207,8 +219,11 @@ function Invoke-MemoryOptimization {
         }
     }
 
-    Set-RegValue "HKLM:\SYSTEM\ControlSet001\Services\Ndu" "Start" 4
-    Write-Fix "NDU service disabled (prevents memory leak)"
+    # CurrentControlSet, not ControlSet001: the active control set is not
+    # always 001 (it can be 002+ after a restore or failed boot), so a
+    # hardcoded 001 may edit a non-active set and silently no-op.
+    Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\Ndu" "Start" 4
+    if (-not $DryRun) { Write-Fix "NDU service disabled (prevents memory leak)" }
 }
 
 function Invoke-ScheduledTasksOptimization {
@@ -232,6 +247,7 @@ function Invoke-ScheduledTasksOptimization {
             $taskName = Split-Path $task -Leaf
             $t = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction SilentlyContinue
             if ($t -and $t.State -ne 'Disabled') {
+                Save-ScheduledTaskState -TaskPath $t.TaskPath -TaskName $t.TaskName
                 Disable-ScheduledTask -TaskPath $t.TaskPath -TaskName $t.TaskName -ErrorAction Stop | Out-Null
                 $shortName = $task.Split('\')[-1]
                 Write-Fix "Disabled task: $shortName"
@@ -242,6 +258,40 @@ function Invoke-ScheduledTasksOptimization {
     }
 }
 
+function Test-DualBootSystem {
+    # Heuristic dual-boot detection: more than one "Windows Boot Loader"
+    # entry, or a firmware entry pointing at a non-Microsoft EFI loader
+    # (grub/shim/etc.), means another OS shares this machine.
+    try {
+        $enum = bcdedit /enum all 2>$null
+        if (-not $enum) { return $false }
+        $text = $enum -join "`n"
+        if (([regex]::Matches($text, 'Windows Boot Loader')).Count -gt 1) { return $true }
+        foreach ($line in $enum) {
+            if ($line -match '\\EFI\\' -and $line -notmatch '\\EFI\\Microsoft\\') {
+                return $true
+            }
+        }
+    } catch {
+        $null = $_
+    }
+    return $false
+}
+
+function Test-HibernationAvailable {
+    # Fast Startup relies on hibernation. If it's off, HiberbootEnabled is
+    # inert, so we shouldn't report enabling it as a real fix.
+    foreach ($name in @('HibernateEnabled', 'HibernateEnabledDefault')) {
+        try {
+            $p = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -Name $name -ErrorAction SilentlyContinue
+            if ($null -ne $p -and $p.$name -eq 1) { return $true }
+        } catch {
+            $null = $_
+        }
+    }
+    return $false
+}
+
 function Invoke-BootOptimization {
     param([hashtable]$Analysis)
 
@@ -250,35 +300,53 @@ function Invoke-BootOptimization {
 
     Write-Host "`n    -- Boot Optimization --" -ForegroundColor Cyan
 
-    Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" "HiberbootEnabled" 1
-    Write-Fix "Fast Startup enabled"
+    # Fast Startup (HiberbootEnabled) hibernates the kernel session on
+    # shutdown. On dual-boot machines this leaves NTFS volumes locked in a
+    # hibernated state that another OS can corrupt, and it blocks clean
+    # external-drive ejection. Skip it when a second OS is present, and only
+    # claim success when hibernation is actually available.
+    if (Test-DualBootSystem) {
+        Write-Skip "Fast Startup skipped (dual-boot detected - prevents NTFS corruption)"
+    } elseif (-not (Test-HibernationAvailable)) {
+        Write-Skip "Fast Startup skipped (hibernation unavailable - run 'powercfg /hibernate on' first)"
+    } else {
+        Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" "HiberbootEnabled" 1
+        if (-not $DryRun) { Write-Fix "Fast Startup enabled" }
+    }
 
     if ($DryRun) {
         Write-Dry "Would reduce boot menu timeout to 3 seconds"
     } else {
+        Save-BcdTimeout
         bcdedit /timeout 3 2>&1 | Out-Null
-        Write-Fix "Boot menu timeout reduced to 3 seconds"
+        if ($LASTEXITCODE -eq 0) {
+            Write-Fix "Boot menu timeout reduced to 3 seconds"
+        } else {
+            Write-Skip "Could not change boot timeout (bcdedit exit $LASTEXITCODE)"
+        }
     }
 
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" "VerboseStatus" 1
-    Write-Fix "Verbose boot messages enabled"
+    if (-not $DryRun) { Write-Fix "Verbose boot messages enabled" }
 }
 
 function Invoke-BackgroundAppsOptimization {
     param([hashtable]$Analysis)
 
     $null = $Analysis  # Used for interface consistency
+    $DryRun = Get-DryRunMode
     Write-Host "`n    -- Background Apps --" -ForegroundColor Cyan
 
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" "GlobalUserDisabled" 1
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "BackgroundAppGlobalToggle" 0
-    Write-Fix "Background apps disabled globally (saves CPU & RAM)"
+    if (-not $DryRun) { Write-Fix "Background apps disabled globally (saves CPU & RAM)" }
 }
 
 function Invoke-NotificationsOptimization {
     param([hashtable]$Analysis)
 
     $null = $Analysis  # Used for interface consistency
+    $DryRun = Get-DryRunMode
     Write-Host "`n    -- Notification & Distraction Cleanup --" -ForegroundColor Cyan
 
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" "RotatingLockScreenOverlayEnabled" 0
@@ -286,7 +354,7 @@ function Invoke-NotificationsOptimization {
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement" "ScoobeSystemSettingEnabled" 0
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" "SubscribedContent-310093Enabled" 0
     Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" "NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK" 0
-    Write-Fix "Notifications and nag screens reduced"
+    if (-not $DryRun) { Write-Fix "Notifications and nag screens reduced" }
 }
 
 function Invoke-DiskOptimization {
@@ -389,6 +457,7 @@ function Invoke-FeaturesOptimization {
         try {
             $f = Get-WindowsOptionalFeature -Online -FeatureName $feat -ErrorAction SilentlyContinue
             if ($f -and $f.State -eq 'Enabled') {
+                Save-FeatureState -FeatureName $feat
                 Disable-WindowsOptionalFeature -Online -FeatureName $feat -NoRestart -ErrorAction Stop | Out-Null
                 Write-Fix "Disabled feature: $feat"
             }

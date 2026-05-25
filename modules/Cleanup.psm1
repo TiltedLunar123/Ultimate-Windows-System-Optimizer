@@ -1,5 +1,54 @@
 # Cleanup.psm1 - Temp files, disk cleanup, recycle bin
 
+function Clear-OldFile {
+    # Delete files under $Path that are older than $MinAgeHours, one file at a
+    # time. Per-file deletion (instead of a recursive Remove-Item) means a
+    # locked or in-use file - e.g. an installer/CBS file Windows is actively
+    # writing during an update - is skipped rather than aborting the whole
+    # sweep or wedging servicing. Skips reparse points (junctions/symlinks) so
+    # we never follow a link out of the intended directory. Returns the number
+    # of bytes actually freed, so the caller's total is accurate.
+    param(
+        [string]$Path,
+        [int]$MinAgeHours = 24,
+        [string[]]$ExcludePaths = @()
+    )
+
+    [long]$freed = 0
+    $cutoff = (Get-Date).AddHours(-$MinAgeHours)
+
+    $files = @()
+    try {
+        $files = Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.LastWriteTime -lt $cutoff -and
+                -not ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint)
+            }
+    } catch {
+        return [long]0
+    }
+
+    foreach ($f in $files) {
+        $skip = $false
+        foreach ($ex in $ExcludePaths) {
+            if ($ex -and $f.FullName.StartsWith($ex, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $skip = $true
+                break
+            }
+        }
+        if ($skip) { continue }
+
+        $size = $f.Length
+        try {
+            Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop
+            $freed += $size
+        } catch {
+            $null = $_  # locked / in use - leave it in place
+        }
+    }
+    return $freed
+}
+
 function Invoke-CleanupOptimization {
     param([hashtable]$Analysis)
 
@@ -19,25 +68,29 @@ function Invoke-CleanupOptimization {
         @{ Path = "$env:WINDIR\Minidump";                                          Desc = "Minidump Files" }
     )
 
+    # Never delete the optimizer's own log/undo files if its data dir happens
+    # to live under one of the temp paths (e.g. the %TEMP% fallback).
+    $excludes = @()
+    if (Get-Command Get-OptimizerDataDir -ErrorAction SilentlyContinue) {
+        $excludes += (Get-OptimizerDataDir)
+    }
+
+    # Only touch files older than this. Disk Cleanup uses the same idea:
+    # freshly written temp files are likely still in use by a running app.
+    $minAgeHours = 24
+
     $totalCleaned = 0
     foreach ($cp in $cleanPaths) {
         if (Test-Path $cp.Path) {
             if ($DryRun) {
-                Write-Dry "Would clean $($cp.Desc) at $($cp.Path)"
+                Write-Dry "Would clean files older than ${minAgeHours}h in $($cp.Desc) at $($cp.Path)"
                 continue
             }
-            try {
-                $before = (Get-ChildItem $cp.Path -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
-                Get-ChildItem $cp.Path -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-                $after = (Get-ChildItem $cp.Path -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
-                $freed = [math]::Round(($before - $after) / 1MB, 1)
-                if ($freed -gt 0) {
-                    Write-Fix "Cleaned $($cp.Desc): $freed MB freed"
-                    $totalCleaned += $freed
-                }
-            } catch {
-                Write-Skip "Could not clean $($cp.Desc)"
-                Log "[ERROR] Cleanup failed for $($cp.Path): $_"
+            $freedBytes = Clear-OldFile -Path $cp.Path -MinAgeHours $minAgeHours -ExcludePaths $excludes
+            $freed = [math]::Round($freedBytes / 1MB, 1)
+            if ($freed -gt 0) {
+                Write-Fix "Cleaned $($cp.Desc): $freed MB freed"
+                $totalCleaned += $freed
             }
         }
     }
@@ -97,4 +150,4 @@ function Invoke-CleanupOptimization {
     }
 }
 
-Export-ModuleMember -Function Invoke-CleanupOptimization
+Export-ModuleMember -Function Invoke-CleanupOptimization, Clear-OldFile

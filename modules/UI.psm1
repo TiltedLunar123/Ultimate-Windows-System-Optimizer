@@ -8,7 +8,7 @@ function Write-Banner {
 
     ============================================================
     |     ULTIMATE WINDOWS SYSTEM OPTIMIZER                    |
-    |         Smart Analysis & Tuning Engine v3.1              |
+    |         Smart Analysis & Tuning Engine v4.0              |
     ============================================================
 
 "@

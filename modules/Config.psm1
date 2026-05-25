@@ -13,7 +13,6 @@ $script:BloatServiceDefinitions = @(
     @{ Name = "DiagTrack";                  Desc = "Connected User Experience & Telemetry" },
     @{ Name = "dmwappushservice";           Desc = "WAP Push Message Routing" },
     @{ Name = "SysMain";                    Desc = "Superfetch (can hurt SSDs)" },
-    @{ Name = "WSearch";                    Desc = "Windows Search Indexer" },
     @{ Name = "XblAuthManager";             Desc = "Xbox Live Auth Manager" },
     @{ Name = "XblGameSave";               Desc = "Xbox Live Game Save" },
     @{ Name = "XboxGipSvc";                Desc = "Xbox Accessory Management" },
@@ -51,6 +50,71 @@ $script:FeaturesToDisable = @(
     "Printing-Foundation-Features",
     "FaxServicesClientPackage"
 )
+
+# Named optimization presets. Each maps to a curated set of sections so a
+# user can pick an intent ("just privacy", "tune for games") instead of
+# hand-listing sections. "Balanced" is every section (the default run).
+# A preset composes with -Skip; -Only still overrides a preset entirely.
+$script:OptimizationPresets = [ordered]@{
+    Balanced = $script:ValidSections
+    Gaming   = @("Cleanup", "Power", "VisualEffects", "Network", "Performance",
+                 "SSD", "Memory", "ScheduledTasks", "Boot", "Disk", "BackgroundApps")
+    Privacy  = @("Privacy", "Services", "Notifications", "BackgroundApps",
+                 "ScheduledTasks", "Security")
+    Minimal  = @("Cleanup", "Privacy")
+}
+
+function Get-PresetNameList {
+    return @($script:OptimizationPresets.Keys)
+}
+
+function Test-PresetName {
+    param([string]$Name)
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+    return @($script:OptimizationPresets.Keys) -contains $Name
+}
+
+function Get-PresetSection {
+    param([string]$Name)
+    if (-not (Test-PresetName $Name)) { return @() }
+    return @($script:OptimizationPresets[$Name])
+}
+
+function Resolve-EnabledSection {
+    # Compute the final, canonically-ordered list of sections to run from a
+    # preset plus -Only/-Skip. -Only wins outright; otherwise the preset
+    # (or all sections) is the base, with -Skip removed.
+    param(
+        [string]$PresetName,
+        [string[]]$Only,
+        [string[]]$Skip
+    )
+
+    $all = $script:ValidSections
+    if ($Only -and $Only.Count -gt 0) {
+        $base = $all | Where-Object { $_ -in $Only }
+    } elseif ($PresetName -and (Test-PresetName $PresetName)) {
+        $presetSections = Get-PresetSection -Name $PresetName
+        $base = $all | Where-Object { $_ -in $presetSections }
+    } else {
+        $base = $all
+    }
+
+    if ($Skip -and $Skip.Count -gt 0) {
+        $base = $base | Where-Object { $_ -notin $Skip }
+    }
+    return @($base)
+}
+
+function Get-OSBuildNumber {
+    # Parse a Win32_OperatingSystem build string into an int. Returns 0 if
+    # the build is empty/non-numeric (e.g. when hardware detection failed
+    # and left OSBuild blank), so callers can compare without [int] throwing.
+    param($Build)
+    $n = 0
+    [void][int]::TryParse("$Build", [ref]$n)
+    return $n
+}
 
 # DryRun state - set by the entry point
 $script:DryRunMode = $false
@@ -110,6 +174,13 @@ $script:AllowedRegHives = @(
     'HKCU:\', 'HKLM:\', 'HKCR:\', 'HKU:\', 'HKCC:\'
 )
 
+# Registry value kinds the undo system knows how to capture and restore.
+# Reject anything else so a typo in a caller can't write a value the undo
+# file then fails to roll back.
+$script:AllowedRegTypes = @(
+    'String', 'ExpandString', 'Binary', 'DWord', 'MultiString', 'QWord'
+)
+
 function Test-RegPathAllowed {
     [CmdletBinding()]
     param([string]$Path)
@@ -135,6 +206,13 @@ function Set-RegValue {
     if (-not (Test-RegPathAllowed -Path $Path)) {
         if (Get-Command Log -ErrorAction SilentlyContinue) {
             Log "[ERROR] Rejected registry path '$Path' - must start with one of: $($script:AllowedRegHives -join ', ')"
+        }
+        return $false
+    }
+
+    if ($Type -notin $script:AllowedRegTypes) {
+        if (Get-Command Log -ErrorAction SilentlyContinue) {
+            Log "[ERROR] Rejected registry type '$Type' for $Path\$Name - must be one of: $($script:AllowedRegTypes -join ', ')"
         }
         return $false
     }
@@ -191,4 +269,6 @@ function Test-SectionEnabled {
 
 Export-ModuleMember -Function Set-RegValue, Get-ValidSectionList, Get-BloatServiceDefinition,
     Get-BloatScheduledTaskList, Get-FeaturesToDisable, Test-SectionEnabled,
-    Set-DryRunMode, Get-DryRunMode, Get-OptimizerDataDir, Test-RegPathAllowed
+    Set-DryRunMode, Get-DryRunMode, Get-OptimizerDataDir, Test-RegPathAllowed,
+    Get-PresetNameList, Test-PresetName, Get-PresetSection, Resolve-EnabledSection,
+    Get-OSBuildNumber
