@@ -17,6 +17,18 @@ function Clear-OldFile {
     [long]$freed = 0
     $cutoff = (Get-Date).AddHours(-$MinAgeHours)
 
+    # Resolve the base path and excludes to canonical (long) form. Enumerated
+    # file paths come back long, but $Path/$ExcludePaths may be passed in 8.3
+    # short form (e.g. C:\Users\RUNNER~1\...); without this the StartsWith
+    # exclusion silently misses and a protected file gets deleted.
+    try { $Path = (Get-Item -LiteralPath $Path -ErrorAction Stop).FullName } catch { $null = $_ }
+    $resolvedExcludes = @()
+    foreach ($ex in $ExcludePaths) {
+        if ([string]::IsNullOrWhiteSpace($ex)) { continue }
+        try { $resolvedExcludes += (Get-Item -LiteralPath $ex -ErrorAction Stop).FullName }
+        catch { $resolvedExcludes += $ex }
+    }
+
     $files = @()
     try {
         $files = Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
@@ -30,8 +42,8 @@ function Clear-OldFile {
 
     foreach ($f in $files) {
         $skip = $false
-        foreach ($ex in $ExcludePaths) {
-            if ($ex -and $f.FullName.StartsWith($ex, [System.StringComparison]::OrdinalIgnoreCase)) {
+        foreach ($ex in $resolvedExcludes) {
+            if ($f.FullName.StartsWith($ex, [System.StringComparison]::OrdinalIgnoreCase)) {
                 $skip = $true
                 break
             }
