@@ -21,12 +21,14 @@ A PowerShell script that analyzes Windows 10/11 systems and applies intelligent,
 - **Scheduled task cleanup** - disables compatibility appraiser, CEIP, disk diagnostics, maps updates, and error reporting tasks
 - **Boot optimization** - enables Fast Startup, reduces boot timeout, enables verbose boot messages
 - **Security hardening** - disables Remote Desktop, Remote Assistance, SMBv1, and AutoRun; verifies Windows Firewall is enabled
-- **Context-aware safety** - skips changes that would break detected hardware or active sessions (Outlook, RDP, printers, touchscreens)
-- **Undo/rollback** - exports all registry changes to a JSON file that can restore previous values
+- **Context-aware safety** - skips changes that would break detected hardware or active sessions (RDP, printers, touchscreens, dual-boot)
+- **Undo/rollback** - exports registry *and* non-registry changes (services, scheduled tasks, optional features, boot timeout) to a JSON file that can be restored later
 - **Dry run mode** - preview all changes without modifying anything
-- **Selective optimization** - run only specific sections or skip sections you don't want
-- **Restore point creation** - automatically creates a System Restore Point before making any changes
-- **Detailed logging** - saves a timestamped log file to the desktop
+- **Selective optimization** - run only specific sections, skip sections you don't want, or pick a named preset
+- **Optimization presets** - `Balanced` (all), `Gaming`, `Privacy`, and `Minimal`
+- **Check-only mode** - analyze and score the system without making any changes
+- **Restore point creation** - creates a System Restore Point before making changes (and verifies it actually exists)
+- **Detailed logging** - saves a timestamped log file and a machine-readable JSON report under `%LOCALAPPDATA%\UWSO`
 
 ## Requirements
 
@@ -44,13 +46,23 @@ irm https://raw.githubusercontent.com/TiltedLunar123/Ultimate-Windows-System-Opt
 ```
 
 That's it. The script will:
-1. Request administrator privileges (UAC prompt)
-2. Download the latest version
-3. Create a System Restore Point so changes can be rolled back
+1. Download the latest version to a temp folder and print its SHA256
+2. Request administrator privileges (UAC prompt) and run the local copy
+3. Create a System Restore Point (when System Protection is enabled)
 4. Analyze your system
 5. Apply all optimizations
 6. Show before/after health scores
 7. Clean up temp files
+
+> **Security note:** this command downloads and runs code that then elevates to
+> administrator. Review `run.ps1` and the repository before running. The
+> installer downloads the archive once (it does not re-download in the elevated
+> shell) and prints the archive's SHA256. To fail closed on tampering, pin a
+> known-good hash:
+>
+> ```powershell
+> $env:UWSO_SHA256 = '<hash printed on a trusted run>'; irm https://raw.githubusercontent.com/TiltedLunar123/Ultimate-Windows-System-Optimizer/main/run.ps1 | iex
+> ```
 
 ## Manual Usage
 
@@ -72,7 +84,10 @@ If you prefer to clone and run manually:
 | `-DryRun` | Switch | Preview all changes without modifying anything. Shows what WOULD happen. |
 | `-Only` | String[] | Run only the specified sections. Example: `-Only "Privacy","Cleanup"` |
 | `-Skip` | String[] | Run all sections except the specified ones. Example: `-Skip "Security","Network"` |
-| `-Undo` | String | Path to a previously generated undo JSON file. Restores all registry values. |
+| `-Preset` | String | Run a named preset instead of all sections: `Balanced`, `Gaming`, `Privacy`, `Minimal`. Composes with `-Skip`; `-Only` overrides. |
+| `-CheckOnly` | Switch | Analyze and score only, then exit. Makes no changes, no restore point, no undo file. |
+| `-Undo` | String | Path to an undo JSON file, or the literal `Latest` to restore the most recent run. Restores registry **and** non-registry changes. |
+| `-ListUndo` | Switch | List available undo files (newest first) and exit. |
 | `-Force` | Switch | Skip per-section confirmation prompts. Runs all enabled sections without asking. |
 
 ### Valid Section Names
@@ -94,7 +109,17 @@ If you prefer to clone and run manually:
 # Run everything except security:
 .\Ultimate-Windows-System-Optimizer.ps1 -Skip "Security"
 
-# Restore from undo file:
+# Run the Gaming preset:
+.\Ultimate-Windows-System-Optimizer.ps1 -Preset Gaming
+
+# Analyze and score only, change nothing:
+.\Ultimate-Windows-System-Optimizer.ps1 -CheckOnly
+
+# List undo files, then roll back the most recent run:
+.\Ultimate-Windows-System-Optimizer.ps1 -ListUndo
+.\Ultimate-Windows-System-Optimizer.ps1 -Undo Latest
+
+# Restore from a specific undo file:
 .\Ultimate-Windows-System-Optimizer.ps1 -Undo "$env:LOCALAPPDATA\UWSO\undo_20260329_120000.json"
 ```
 
@@ -105,15 +130,15 @@ The optimizer is split into a modular architecture for maintainability and testa
 ```
 Ultimate-Windows-System-Optimizer.ps1   # Entry point, orchestration, parameter handling
 modules/
-  Config.psm1          # Shared constants, tier definitions, Set-RegValue helper
+  Config.psm1          # Shared constants, bloat lists, presets, Set-RegValue helper
   UI.psm1              # Banner, section headers, status output, colors, logging
-  UndoManager.psm1     # Save registry state before changes, restore from JSON
+  UndoManager.psm1     # Save registry + non-registry state before changes, restore from JSON
   Analysis.psm1        # Phase 1 - hardware/disk/temp/startup/services/power analysis + scoring
   Cleanup.psm1         # Temp files, disk cleanup, recycle bin
   Services.psm1        # Bloat service detection and disabling
   Privacy.psm1         # Telemetry, ads, tracking, content delivery, feedback
   Network.psm1         # Nagle, TCP, DNS, network throttling
-  Performance.psm1     # Gaming, visual effects, memory, GPU, boot, scheduled tasks, background apps
+  Performance.psm1     # Power, gaming, visual effects, memory, GPU, SSD, disk, boot, scheduled tasks, background apps, notifications, features
   Security.psm1        # RDP, SMB, firewall, autorun
   Explorer.psm1        # Shell tweaks, context menu, file extensions, search
 tests/
@@ -124,13 +149,13 @@ tests/
   ci.yml               # PSScriptAnalyzer lint + Pester tests on push/PR
 ```
 
-Each optimization module exports a single `Invoke-*Optimization` function. The analysis module exports `Get-SystemAnalysis` (returns a results hashtable) and `Get-HealthScore` (computes score from results). The undo manager exports `Save-RegistryState`, `Export-UndoFile`, and `Restore-FromUndoFile`.
+Each optimization module exports a single `Invoke-*Optimization` function. The analysis module exports `Get-SystemAnalysis` (returns a results hashtable), `Get-HealthScore` (computes score from results), and the pure helpers `Get-SystemTier` and `Get-PowerPlanName`. The undo manager records both registry changes (`Save-RegistryState`, `Save-RegistryKeyState`) and non-registry changes (`Save-ServiceState`, `Save-ScheduledTaskState`, `Save-FeatureState`, `Save-BcdTimeout`), and restores them with `Restore-FromUndoFile` (`-Undo Latest` and `-ListUndo` are driven by `Get-UndoFileList`).
 
 ## What the Script Modifies
 
 | Category | Examples |
 |---|---|
-| Windows services | Telemetry, Xbox, Fax, Geolocation, Search Indexer, etc. |
+| Windows services | Telemetry, Xbox, Fax, Geolocation, etc. (Windows Search is left enabled) |
 | Registry values | Privacy settings, visual effects, power throttling, network tuning |
 | Power configuration | Power plan selection, CPU throttle limits, USB suspend settings |
 | Scheduled tasks | Compatibility appraiser, CEIP, disk diagnostics, map updates |
@@ -151,13 +176,21 @@ Optimizer_Log_YYYYMMDD_HHMMSS.txt
 
 This log contains timestamped entries for every action, warning, fix, and skip that occurred during the run.
 
-An undo file is written to the same directory after optimization:
+A machine-readable JSON report is written alongside the log:
+
+```
+report_YYYYMMDD_HHMMSS.json
+```
+
+It captures the device profile, system tier, preset, sections run, before/after health scores, fix count, and run duration.
+
+An undo file is also written to the same directory after optimization:
 
 ```
 undo_YYYYMMDD_HHMMSS.json
 ```
 
-This JSON file records the previous value of every registry key that was modified, allowing full rollback with the `-Undo` parameter. The file's ACL is tightened after write so only the current user can read it (the JSON contains enough configuration detail that it shouldn't be world-readable on a shared machine).
+This JSON file records the previous state of everything that was modified - registry values and keys, plus non-registry changes (service startup types, scheduled task states, optional feature states, and the boot menu timeout) - allowing rollback with `-Undo <file>` or `-Undo Latest`. The file's ACL is tightened after write so only the current user can read it (the JSON contains enough configuration detail that it shouldn't be world-readable on a shared machine).
 
 ## Disclaimer
 
@@ -174,6 +207,10 @@ Some things to keep in mind:
 - Use the generated undo file to roll back registry changes
 
 **Always review the script before running it on a machine you depend on.**
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes. The current release is **v4.0**.
 
 ## License
 

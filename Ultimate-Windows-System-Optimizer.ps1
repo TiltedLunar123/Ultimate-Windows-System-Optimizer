@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Ultimate Windows System Optimizer v3.1 — automated performance tuning for Windows 10/11.
+    Ultimate Windows System Optimizer v4.0 - automated performance tuning for Windows 10/11.
 
 .DESCRIPTION
     Performs deep system analysis and applies intelligent optimizations based on detected
@@ -21,17 +21,30 @@
 .PARAMETER Skip
     Skip the specified optimization sections. Same valid values as -Only.
 
+.PARAMETER Preset
+    Run a named preset instead of all sections. Valid values: Balanced (all
+    sections), Gaming, Privacy, Minimal. Composes with -Skip; -Only overrides.
+
 .PARAMETER DryRun
     Show what changes WOULD be made without actually modifying anything.
 
+.PARAMETER CheckOnly
+    Run analysis and the health score only, then exit. Makes no changes,
+    creates no restore point, and writes no undo file.
+
 .PARAMETER Undo
-    Path to a previously generated undo JSON file. Restores all registry values.
+    Path to a previously generated undo JSON file, or the literal value
+    'Latest' to restore the most recent undo file. Restores registry values
+    and non-registry changes (services, scheduled tasks, features, boot timeout).
+
+.PARAMETER ListUndo
+    List available undo files (newest first) and exit.
 
 .PARAMETER Force
     Skip per-section confirmation prompts.
 
 .NOTES
-    Version      : 3.1
+    Version      : 4.0
     Author       : TiltedLunar123
     Requires     : Windows 10 or 11, PowerShell 5.1+, Administrator privileges
     Restore Point: Created automatically before optimization begins
@@ -56,13 +69,29 @@
 .EXAMPLE
     # Restore from undo file:
     .\Ultimate-Windows-System-Optimizer.ps1 -Undo "C:\Users\you\Desktop\undo_20260329_120000.json"
+
+.EXAMPLE
+    # Run the Gaming preset:
+    .\Ultimate-Windows-System-Optimizer.ps1 -Preset Gaming
+
+.EXAMPLE
+    # Analyze and score only, make no changes:
+    .\Ultimate-Windows-System-Optimizer.ps1 -CheckOnly
+
+.EXAMPLE
+    # List undo files, then roll back the most recent run:
+    .\Ultimate-Windows-System-Optimizer.ps1 -ListUndo
+    .\Ultimate-Windows-System-Optimizer.ps1 -Undo Latest
 #>
 
 param(
     [string[]]$Only,
     [string[]]$Skip,
+    [string]$Preset,
     [switch]$DryRun,
+    [switch]$CheckOnly,
     [string]$Undo,
+    [switch]$ListUndo,
     [switch]$Force
 )
 
@@ -91,16 +120,46 @@ Import-Module (Join-Path $modulesPath "Explorer.psm1")   -Force -DisableNameChec
 # redirected to a network share, marked read-only, or absent entirely).
 $LogFile = Join-Path (Get-OptimizerDataDir) ("Optimizer_Log_" + (Get-Date -Format 'yyyyMMdd_HHmmss') + ".txt")
 
+# ── LIST UNDO FILES ─────────────────────────────────────────────
+if ($ListUndo) {
+    Write-Banner
+    Write-Section "AVAILABLE UNDO FILES"
+    $files = Get-UndoFileList
+    if (-not $files -or $files.Count -eq 0) {
+        Write-Host "    No undo files found in $(Get-OptimizerDataDir)" -ForegroundColor Yellow
+    } else {
+        foreach ($f in $files) {
+            Write-Host ("    {0}   {1}" -f $f.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'), $f.FullName) -ForegroundColor Gray
+        }
+        Write-Host ""
+        Write-Host "    Restore the newest with:  -Undo Latest" -ForegroundColor Cyan
+    }
+    Write-Host ""
+    return
+}
+
 # ── UNDO MODE ───────────────────────────────────────────────────
 if ($Undo) {
     Write-Banner
     Write-Section "UNDO / ROLLBACK"
-    Write-Host "    Restoring from: $Undo" -ForegroundColor Cyan
-    $success = Restore-FromUndoFile -FilePath $Undo
+
+    $undoPath = $Undo
+    if ($Undo -eq 'Latest') {
+        $latest = Get-UndoFileList | Select-Object -First 1
+        if (-not $latest) {
+            Write-Host "    No undo files found in $(Get-OptimizerDataDir)" -ForegroundColor Yellow
+            Write-Host ""
+            return
+        }
+        $undoPath = $latest.FullName
+    }
+
+    Write-Host "    Restoring from: $undoPath" -ForegroundColor Cyan
+    $success = Restore-FromUndoFile -FilePath $undoPath
     if ($success) {
-        Write-Host "    All registry values restored successfully." -ForegroundColor Green
+        Write-Host "    All changes restored successfully." -ForegroundColor Green
     } else {
-        Write-Host "    Some values could not be restored. Check warnings above." -ForegroundColor Yellow
+        Write-Host "    Some changes could not be restored. Check warnings above." -ForegroundColor Yellow
     }
     Write-Host ""
     return
@@ -124,6 +183,16 @@ if ($Skip) {
         }
     }
 }
+
+# ── VALIDATE PRESET ─────────────────────────────────────────────
+if ($Preset -and -not (Test-PresetName $Preset)) {
+    Write-Host "  ERROR: Invalid preset '$Preset'. Valid presets: $((Get-PresetNameList) -join ', ')" -ForegroundColor Red
+    return
+}
+
+# Resolve which sections run from the preset + -Only/-Skip up front so the
+# value can be shown to the user and reused in the report.
+$enabledSections = Resolve-EnabledSection -PresetName $Preset -Only $Only -Skip $Skip
 
 # ── DRY RUN MODE ────────────────────────────────────────────────
 if ($DryRun) {
@@ -179,6 +248,14 @@ if ($DryRun) {
     Write-Host "  *** DRY RUN MODE - No changes will be made ***" -ForegroundColor DarkYellow
     Write-Host ""
 }
+if ($CheckOnly) {
+    Write-Host "  *** CHECK-ONLY MODE - analysis and health score only, no changes ***" -ForegroundColor DarkYellow
+    Write-Host ""
+}
+if ($Preset) {
+    Write-Host "  Preset: $Preset  ->  $($enabledSections -join ', ')" -ForegroundColor Cyan
+    Write-Host ""
+}
 
 Write-Host "  This script will:" -ForegroundColor White
 Write-Host "    1. Analyze your system hardware & software" -ForegroundColor Gray
@@ -191,7 +268,7 @@ Write-Host "  registry values, and scheduled tasks. Review the README" -Foregrou
 Write-Host "  before proceeding." -ForegroundColor Yellow
 Write-Host ""
 
-if (-not $Force) {
+if (-not $Force -and -not $CheckOnly) {
     if (-not (Confirm-Action "Ready to begin analysis and optimization?")) {
         Write-Host "`n  Cancelled. No changes made." -ForegroundColor Red
         return
@@ -203,6 +280,26 @@ $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 # Phase 1 - Analysis
 $analysisResults = Get-SystemAnalysis
 $beforeScore = Get-HealthScore -AnalysisResults $analysisResults
+
+# Check-only mode: report the score and stop before any changes.
+if ($CheckOnly) {
+    $stopwatch.Stop()
+    Write-Section "CHECK-ONLY COMPLETE"
+    Write-Host ""
+    Write-Host "    Device Type:  $($analysisResults.DeviceType)" -ForegroundColor Gray
+    Write-Host "    System Tier:  $($analysisResults.SystemTier)" -ForegroundColor Gray
+    Write-Host "    Health Score: $beforeScore/100" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "    No changes were made. Re-run without -CheckOnly to optimize." -ForegroundColor Gray
+    try {
+        Get-Report | Out-File -FilePath $LogFile -Encoding UTF8 -Force
+        Write-Host "    Log saved to: $LogFile" -ForegroundColor Gray
+    } catch {
+        Write-Host "    Could not save log file to $LogFile" -ForegroundColor Red
+    }
+    Write-Host ""
+    return
+}
 
 if (-not $Force) {
     Write-Host ""
@@ -221,9 +318,21 @@ if ($RestorePoint -and -not $DryRun) {
     try {
         Enable-ComputerRestore -Drive "$env:SystemDrive\" -ErrorAction SilentlyContinue
         Checkpoint-Computer -Description "Pre-Optimizer Backup $(Get-Date -Format 'yyyy-MM-dd HH:mm')" -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
-        Write-Good "Restore point created successfully"
+
+        # Verify a restore point actually exists. System Protection is disabled
+        # by default on many Windows 11/SSD installs, where Checkpoint-Computer
+        # can quietly no-op - don't promise a rollback path that isn't there.
+        $anyPoints = @()
+        if (Get-Command Get-ComputerRestorePoint -ErrorAction SilentlyContinue) {
+            try { $anyPoints = @(Get-ComputerRestorePoint -ErrorAction SilentlyContinue) } catch { $null = $_ }
+        }
+        if ($anyPoints.Count -gt 0) {
+            Write-Good "Restore point available (System Protection is on)"
+        } else {
+            Write-Warn "No restore points found - System Protection may be disabled. The undo file will still capture changes."
+        }
     } catch {
-        Write-Warn "Could not create restore point (may have been created recently)"
+        Write-Warn "Could not create restore point. System Protection may be off; the undo file will still capture changes."
         Log "[ERROR] Restore point creation failed: $_"
     }
 } elseif ($DryRun) {
@@ -232,7 +341,7 @@ if ($RestorePoint -and -not $DryRun) {
 
 # Run each enabled section
 foreach ($sectionName in $sectionMap.Keys) {
-    if (-not (Test-SectionEnabled -SectionName $sectionName -Only $Only -Skip $Skip)) {
+    if ($sectionName -notin $enabledSections) {
         continue
     }
 
@@ -243,35 +352,36 @@ foreach ($sectionName in $sectionMap.Keys) {
         }
     }
 
-    & $sectionMap[$sectionName] $analysisResults
+    # Out-Null swallows the $true/$false that Set-RegValue returns to the
+    # output stream (Write-Host/Write-Fix go to the host, so they still show).
+    & $sectionMap[$sectionName] $analysisResults | Out-Null
 }
 
 $stopwatch.Stop()
 
 # Export undo file
+$undoFile = $null
 if (-not $DryRun) {
     $undoFile = Export-UndoFile
     if ($undoFile) {
         Write-Host ""
         Write-Good "Undo file saved: $undoFile"
-        Write-Host "    Use -Undo `"$undoFile`" to restore all registry changes" -ForegroundColor Gray
+        Write-Host "    Use -Undo `"$undoFile`" (or -Undo Latest) to roll back changes" -ForegroundColor Gray
     }
 }
 
 # Phase 3 - Re-run analysis for real after-score
 Write-Section "PHASE 3: OPTIMIZATION COMPLETE"
 
-# Re-analyze to get actual post-optimization score
-$postResults = @{
-    RAMUsedPct        = $analysisResults.RAMUsedPct
-    StartupItems      = @(Get-StartupItem)
-    TempSizeMB        = 0  # temp files cleaned
-    ServicesToDisable  = @()
-    TelemetryEnabled  = $false
-    CurrentPowerPlan   = ""
-    Disks             = $analysisResults.Disks
-    VisualEffects      = ""
-}
+# Re-analyze to get the actual post-optimization score. Clone the original
+# analysis so the scorer sees the SAME shape (IsLaptop, Disks, RAM totals,
+# etc.), then overwrite only the fields optimization can change. Building a
+# partial literal here previously dropped keys like IsLaptop, so before and
+# after scores were computed against different schemas.
+$postResults = $analysisResults.Clone()
+$postResults.StartupItems      = @(Get-StartupItem)
+$postResults.TempSizeMB        = 0
+$postResults.ServicesToDisable = @()
 
 # Re-check actual system state for accurate score
 try {
@@ -305,16 +415,21 @@ foreach ($svc in $bloatSvcs) {
     }
 }
 
-# Re-check telemetry
-$telVal = (Get-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name AllowTelemetry -ErrorAction SilentlyContinue).AllowTelemetry
+# Re-check telemetry. Read the value defensively: under Set-StrictMode,
+# accessing a property that doesn't exist on the returned object throws, and
+# AllowTelemetry is absent on many machines.
+$telItem = Get-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name AllowTelemetry -ErrorAction SilentlyContinue
+$telVal = if ($telItem -and $telItem.PSObject.Properties['AllowTelemetry']) { $telItem.AllowTelemetry } else { $null }
 $postResults.TelemetryEnabled = ($telVal -ne 0)
 
 # Re-check power plan
 $activePlan = powercfg /getactivescheme 2>$null
-$postResults.CurrentPowerPlan = if ($activePlan -match '"([^"]+)"') { $Matches[1] } else { "Unknown" }
+$postResults.CurrentPowerPlan = Get-PowerPlanName (($activePlan | Out-String))
 
-# Re-check visual effects
-$veSetting = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -ErrorAction SilentlyContinue).VisualFXSetting
+# Re-check visual effects (same StrictMode-safe read - VisualFXSetting is
+# often unset, which previously threw a PropertyNotFoundStrict here).
+$veItem = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -ErrorAction SilentlyContinue
+$veSetting = if ($veItem -and $veItem.PSObject.Properties['VisualFXSetting']) { $veItem.VisualFXSetting } else { $null }
 $postResults.VisualEffects = switch ($veSetting) { 0 { "Auto" } 1 { "Appearance" } 2 { "Performance" } 3 { "Custom" } default { "Unknown" } }
 
 $newScore = Get-HealthScore -AnalysisResults $postResults
@@ -368,6 +483,36 @@ try {
     Write-Host "       $LogFile" -ForegroundColor White
 } catch {
     Write-Host "    Could not save log file to $LogFile" -ForegroundColor Red
+}
+
+# Machine-readable JSON report alongside the log.
+$report = [ordered]@{
+    Tool            = "Ultimate Windows System Optimizer"
+    Version         = "4.0"
+    TimestampUtc    = (Get-Date).ToUniversalTime().ToString("o")
+    DeviceType      = $analysisResults.DeviceType
+    SystemTier      = $analysisResults.SystemTier
+    OS              = $analysisResults.OSVersion
+    OSBuild         = $analysisResults.OSBuild
+    CPU             = $analysisResults.CPUName
+    TotalRAMGB      = $analysisResults.TotalRAMGB
+    Preset          = if ($Preset) { $Preset } else { "All" }
+    SectionsRun     = @($enabledSections)
+    DryRun          = [bool]$DryRun
+    BeforeScore     = $beforeScore
+    AfterScore      = $newScore
+    FixesApplied    = $fixCount
+    DurationSeconds = [math]::Round($stopwatch.Elapsed.TotalSeconds, 1)
+    Disks           = @($analysisResults.Disks)
+    UndoFile        = $undoFile
+}
+$reportFile = Join-Path (Get-OptimizerDataDir) ("report_" + (Get-Date -Format 'yyyyMMdd_HHmmss') + ".json")
+try {
+    $report | ConvertTo-Json -Depth 5 | Out-File -FilePath $reportFile -Encoding UTF8 -Force
+    Write-Host "    JSON report saved to:" -ForegroundColor Gray
+    Write-Host "       $reportFile" -ForegroundColor White
+} catch {
+    Log "[WARN] Could not write JSON report: $_"
 }
 
 Write-Host ""
