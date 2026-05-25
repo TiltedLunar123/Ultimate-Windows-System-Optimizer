@@ -258,4 +258,73 @@ Describe "Set-RegValue path validation" {
         (Set-RegValue "" "X" 1)  | Should -Be $false
         (Set-RegValue "   " "X" 1) | Should -Be $false
     }
+
+    It "Should reject an unknown registry value type" {
+        $result = Set-RegValue "HKCU:\Software\UWSOTypeTest_$(Get-Random)" "X" 1 "NotARealType"
+        $result | Should -Be $false
+    }
+}
+
+Describe "Optimization Presets" {
+    It "Should expose the documented preset names" {
+        $names = Get-PresetNameList
+        $names | Should -Contain "Balanced"
+        $names | Should -Contain "Gaming"
+        $names | Should -Contain "Privacy"
+        $names | Should -Contain "Minimal"
+    }
+
+    It "Test-PresetName accepts a known preset and rejects an unknown one" {
+        Test-PresetName "Gaming"  | Should -Be $true
+        Test-PresetName "Nonsense" | Should -Be $false
+        Test-PresetName ""         | Should -Be $false
+    }
+
+    It "Balanced preset resolves to every section" {
+        $sections = Resolve-EnabledSection -PresetName "Balanced"
+        ($sections | Sort-Object) | Should -Be ((Get-ValidSectionList) | Sort-Object)
+    }
+
+    It "Gaming preset excludes Privacy and Security" {
+        $sections = Resolve-EnabledSection -PresetName "Gaming"
+        $sections | Should -Not -Contain "Privacy"
+        $sections | Should -Not -Contain "Security"
+        $sections | Should -Contain "Performance"
+    }
+
+    It "-Only overrides a preset entirely" {
+        $sections = Resolve-EnabledSection -PresetName "Gaming" -Only @("Privacy")
+        $sections | Should -Be @("Privacy")
+    }
+
+    It "-Skip removes sections from a preset" {
+        $sections = Resolve-EnabledSection -PresetName "Privacy" -Skip @("Security")
+        $sections | Should -Not -Contain "Security"
+        $sections | Should -Contain "Privacy"
+    }
+
+    It "Returns sections in canonical order" {
+        $all = Get-ValidSectionList
+        $sections = Resolve-EnabledSection -PresetName "Gaming"
+        $indices = $sections | ForEach-Object { [array]::IndexOf($all, $_) }
+        $sorted = $indices | Sort-Object
+        "$indices" | Should -Be "$sorted"
+    }
+}
+
+Describe "Bloat list safety" {
+    It "Should NOT include WSearch (Start Menu/Explorer/Outlook depend on it - #20)" {
+        $names = (Get-BloatServiceDefinition).Name
+        $names | Should -Not -Contain "WSearch"
+    }
+}
+
+Describe "Get-OSBuildNumber" {
+    It "Parses a numeric build string" {
+        Get-OSBuildNumber "22631" | Should -Be 22631
+    }
+    It "Returns 0 for an empty or non-numeric build" {
+        Get-OSBuildNumber ""    | Should -Be 0
+        Get-OSBuildNumber "n/a" | Should -Be 0
+    }
 }

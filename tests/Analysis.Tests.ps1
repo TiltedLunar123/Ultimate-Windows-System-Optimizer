@@ -7,58 +7,61 @@ BeforeAll {
 }
 
 Describe "System Tier Classification" {
+    # These call the real Get-SystemTier so the test fails if the product
+    # logic changes - the previous version re-implemented the if/else inline.
     It "Should classify High-End system (16GB+ RAM, 6+ cores)" {
-        $results = @{
-            TotalRAMGB = 32; CPUCores = 8; RAMUsedPct = 50;
-            StartupItems = @(); TempSizeMB = 50; ServicesToDisable = @();
-            TelemetryEnabled = $false; CurrentPowerPlan = "High performance";
-            Disks = @(); VisualEffects = "Performance"
-        }
-        # Simulate tier logic
-        if ($results.TotalRAMGB -ge 16 -and $results.CPUCores -ge 6) {
-            $tier = "High-End"
-        } elseif ($results.TotalRAMGB -ge 8 -and $results.CPUCores -ge 4) {
-            $tier = "Mid-Range"
-        } else {
-            $tier = "Low-End"
-        }
-        $tier | Should -Be "High-End"
+        Get-SystemTier -RamGB 32 -Cores 8 | Should -Be "High-End"
     }
 
     It "Should classify Mid-Range system (8GB RAM, 4 cores)" {
-        $results = @{ TotalRAMGB = 8; CPUCores = 4 }
-        if ($results.TotalRAMGB -ge 16 -and $results.CPUCores -ge 6) {
-            $tier = "High-End"
-        } elseif ($results.TotalRAMGB -ge 8 -and $results.CPUCores -ge 4) {
-            $tier = "Mid-Range"
-        } else {
-            $tier = "Low-End"
-        }
-        $tier | Should -Be "Mid-Range"
+        Get-SystemTier -RamGB 8 -Cores 4 | Should -Be "Mid-Range"
     }
 
     It "Should classify Low-End system (4GB RAM, 2 cores)" {
-        $results = @{ TotalRAMGB = 4; CPUCores = 2 }
-        if ($results.TotalRAMGB -ge 16 -and $results.CPUCores -ge 6) {
-            $tier = "High-End"
-        } elseif ($results.TotalRAMGB -ge 8 -and $results.CPUCores -ge 4) {
-            $tier = "Mid-Range"
-        } else {
-            $tier = "Low-End"
-        }
-        $tier | Should -Be "Low-End"
+        Get-SystemTier -RamGB 4 -Cores 2 | Should -Be "Low-End"
     }
 
     It "Should classify 16GB/4-core as Mid-Range (needs 6+ cores for High-End)" {
-        $results = @{ TotalRAMGB = 16; CPUCores = 4 }
-        if ($results.TotalRAMGB -ge 16 -and $results.CPUCores -ge 6) {
-            $tier = "High-End"
-        } elseif ($results.TotalRAMGB -ge 8 -and $results.CPUCores -ge 4) {
-            $tier = "Mid-Range"
-        } else {
-            $tier = "Low-End"
+        Get-SystemTier -RamGB 16 -Cores 4 | Should -Be "Mid-Range"
+    }
+}
+
+Describe "Get-PowerPlanName" {
+    It "Should extract a parenthesized name (modern powercfg output)" {
+        $out = "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)"
+        Get-PowerPlanName $out | Should -Be "High performance"
+    }
+
+    It "Should extract a double-quoted name (legacy powercfg output)" {
+        $out = 'Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  "Balanced"'
+        Get-PowerPlanName $out | Should -Be "Balanced"
+    }
+
+    It "Should return Unknown when no name is present" {
+        Get-PowerPlanName "no plan name here" | Should -Be "Unknown"
+    }
+}
+
+Describe "Get-HealthScore hardening" {
+    It "Should return 100 when optional keys (IsLaptop) are absent" {
+        # The post-optimization re-score can pass a partial hashtable; a
+        # missing key must not crash or wrongly deduct.
+        $results = @{
+            RAMUsedPct = 30; TempSizeMB = 10; TelemetryEnabled = $false
+            CurrentPowerPlan = "High performance"; VisualEffects = "Performance"
         }
-        $tier | Should -Be "Mid-Range"
+        Get-HealthScore -AnalysisResults $results | Should -Be 100
+    }
+
+    It "Should treat a single-element StartupItems collection as count 1" {
+        $results = @{
+            RAMUsedPct = 30; TempSizeMB = 10; ServicesToDisable = @()
+            TelemetryEnabled = $false; CurrentPowerPlan = "High performance"
+            Disks = @(); VisualEffects = "Performance"
+            StartupItems = @{ Name = "OnlyOne" }
+        }
+        # One startup item is below every threshold, so the score stays 100.
+        Get-HealthScore -AnalysisResults $results | Should -Be 100
     }
 }
 
