@@ -352,7 +352,9 @@ foreach ($sectionName in $sectionMap.Keys) {
         }
     }
 
-    & $sectionMap[$sectionName] $analysisResults
+    # Out-Null swallows the $true/$false that Set-RegValue returns to the
+    # output stream (Write-Host/Write-Fix go to the host, so they still show).
+    & $sectionMap[$sectionName] $analysisResults | Out-Null
 }
 
 $stopwatch.Stop()
@@ -413,16 +415,21 @@ foreach ($svc in $bloatSvcs) {
     }
 }
 
-# Re-check telemetry
-$telVal = (Get-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name AllowTelemetry -ErrorAction SilentlyContinue).AllowTelemetry
+# Re-check telemetry. Read the value defensively: under Set-StrictMode,
+# accessing a property that doesn't exist on the returned object throws, and
+# AllowTelemetry is absent on many machines.
+$telItem = Get-ItemProperty "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name AllowTelemetry -ErrorAction SilentlyContinue
+$telVal = if ($telItem -and $telItem.PSObject.Properties['AllowTelemetry']) { $telItem.AllowTelemetry } else { $null }
 $postResults.TelemetryEnabled = ($telVal -ne 0)
 
 # Re-check power plan
 $activePlan = powercfg /getactivescheme 2>$null
 $postResults.CurrentPowerPlan = Get-PowerPlanName (($activePlan | Out-String))
 
-# Re-check visual effects
-$veSetting = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -ErrorAction SilentlyContinue).VisualFXSetting
+# Re-check visual effects (same StrictMode-safe read - VisualFXSetting is
+# often unset, which previously threw a PropertyNotFoundStrict here).
+$veItem = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -ErrorAction SilentlyContinue
+$veSetting = if ($veItem -and $veItem.PSObject.Properties['VisualFXSetting']) { $veItem.VisualFXSetting } else { $null }
 $postResults.VisualEffects = switch ($veSetting) { 0 { "Auto" } 1 { "Appearance" } 2 { "Performance" } 3 { "Custom" } default { "Unknown" } }
 
 $newScore = Get-HealthScore -AnalysisResults $postResults
