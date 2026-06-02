@@ -9,7 +9,7 @@ A PowerShell script that analyzes Windows 10/11 systems and applies intelligent,
 
 - **Deep system analysis** - detects CPU, RAM, GPU, SSD/HDD, laptop vs. desktop, and assigns a system tier (Low-End, Mid-Range, High-End)
 - **Health scoring** - calculates a real 0-100 health score before and after optimization
-- **Temp file cleanup** - removes user temp, Windows temp, internet cache, update cache, crash dumps, thumbnail cache, and empties the Recycle Bin
+- **Temp file cleanup** - removes user temp, Windows temp, internet cache, update cache, crash dumps, thumbnail cache, and empties the Recycle Bin. Only files older than 24 hours are touched, so anything from the current session stays put, and it deletes files rather than wiping whole directory trees out from under running apps
 - **Service trimming** - disables telemetry, Xbox, fax, geolocation, and other commonly unnecessary services
 - **Power plan tuning** - activates Ultimate/High Performance on desktops; optimizes AC vs. battery profiles on laptops
 - **Visual effects optimization** - adjusts animations and effects based on system tier
@@ -139,7 +139,7 @@ Each optimization module exports a single `Invoke-*Optimization` function. The a
 | Gaming settings | Game Mode, Game DVR, GPU scheduling, mouse acceleration |
 | Security settings | Remote Desktop, Remote Assistance, SMBv1, AutoRun, Firewall |
 | Optional features | Windows Media Player, Work Folders, Fax client |
-| Disk optimization | TRIM on SSDs, defrag on HDDs, temp file removal |
+| Disk optimization | TRIM on SSDs, defrag on HDDs, temp file removal (files older than 24h only) |
 
 ## Output
 
