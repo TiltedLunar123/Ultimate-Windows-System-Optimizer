@@ -58,7 +58,12 @@ Describe "Undo File Generation" {
 
 Describe "Undo File Restore" {
     It "Should fail gracefully with non-existent file" {
-        { Restore-FromUndoFile -FilePath "C:\nonexistent\file.json" } | Should -Throw
+        # Graceful means it returns false and does not throw, regardless of
+        # the caller's ErrorActionPreference. The main script depends on the
+        # boolean to print a rollback message instead of crashing.
+        $script:undoResult = $true
+        { $script:undoResult = Restore-FromUndoFile -FilePath "C:\nonexistent\file.json" 3>$null } | Should -Not -Throw
+        $script:undoResult | Should -Be $false
     }
 
     It "Should read and process a valid undo file" {

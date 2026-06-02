@@ -112,7 +112,12 @@ function Restore-FromUndoFile {
     )
 
     if (-not (Test-Path $FilePath)) {
-        Write-Error "Undo file not found: $FilePath"
+        # Warn, don't error. A missing path is a user mistake, not a fault,
+        # and the caller already handles the $false return with a friendly
+        # message. Write-Error made the outcome depend on the caller's
+        # ErrorActionPreference: it returned $false locally but threw under
+        # Stop (as CI runs), so the behavior was never deterministic.
+        Write-Warning "Undo file not found: $FilePath"
         return $false
     }
 
