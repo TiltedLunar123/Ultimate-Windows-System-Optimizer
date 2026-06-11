@@ -22,15 +22,45 @@ param(
 # Allow opt-in via env var too, since piping into iex strips parameters
 if ($env:UWSO_AUTO -eq '1') { $Auto = $true }
 
+# Raw URL of this bootstrap script. Only used as a fallback for the case where
+# run.ps1 was piped straight into the shell (irm ... | iex) and so has no
+# on-disk copy to re-run when it elevates.
+$RunScriptUrl = "https://raw.githubusercontent.com/TiltedLunar123/Ultimate-Windows-System-Optimizer/main/run.ps1"
+
+function Get-ElevationArgumentString {
+    # Build the powershell.exe argument string used to relaunch this installer
+    # with admin rights. Issue #10: when run.ps1 already exists on disk, re-run
+    # that exact file with -File so the elevated process runs the same code the
+    # user looked at, with no second network fetch. Fall back to re-downloading
+    # only when there is no local copy (the irm | iex one-liner).
+    param(
+        [string]$LocalScriptPath,
+        [switch]$Auto
+    )
+
+    if ($LocalScriptPath -and (Test-Path -LiteralPath $LocalScriptPath)) {
+        $argString = "-NoProfile -ExecutionPolicy Bypass -File `"$LocalScriptPath`""
+        if ($Auto) { $argString += " -Auto" }
+        return $argString
+    }
+
+    $autoEnv = if ($Auto) { "`$env:UWSO_AUTO = '1'; " } else { "" }
+    $command = "Set-ExecutionPolicy Bypass -Scope Process -Force; ${autoEnv}irm $RunScriptUrl | iex"
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+    return "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
+}
+
+# Tests dot-source this file to exercise Get-ElevationArgumentString without kicking
+# off a real install (which self-elevates and downloads). Real entry points -
+# irm | iex, -File, & ./run.ps1 - never set InvocationName to '.'.
+if ($MyInvocation.InvocationName -eq '.') { return }
+
 # Self-elevate to admin if not already
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Host "`n  Requesting administrator privileges..." -ForegroundColor Yellow
-    $autoEnv = if ($Auto) { "`$env:UWSO_AUTO = '1'; " } else { "" }
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes(
-        "Set-ExecutionPolicy Bypass -Scope Process -Force; ${autoEnv}irm https://raw.githubusercontent.com/TiltedLunar123/Ultimate-Windows-System-Optimizer/main/run.ps1 | iex"
-    ))
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded" -Verb RunAs
+    $elevationArgs = Get-ElevationArgumentString -LocalScriptPath $PSCommandPath -Auto:$Auto
+    Start-Process powershell.exe -ArgumentList $elevationArgs -Verb RunAs
     return
 }
 
