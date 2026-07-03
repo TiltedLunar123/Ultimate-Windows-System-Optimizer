@@ -36,8 +36,11 @@ function Invoke-NetworkOptimization {
         }
     }
 
+    # Issue #8: Set-RegValue stages the write and prints [DRY] under DryRun, so
+    # these [FIX] summaries have to be gated too. The per-key [DRY] lines still
+    # tell the user what would happen; we just don't count it as applied.
     if ($applied -gt 0) {
-        Write-Fix "Nagle's algorithm disabled on $applied physical adapter(s)"
+        if (-not $DryRun) { Write-Fix "Nagle's algorithm disabled on $applied physical adapter(s)" }
     } else {
         Write-Skip "No eligible physical adapters; skipped Nagle tuning"
     }
@@ -48,7 +51,7 @@ function Invoke-NetworkOptimization {
     # guidance is 10-20%. 10 keeps gaming/network priority high without
     # crippling background work.
     Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" "SystemResponsiveness" 10
-    Write-Fix "Network throttling disabled (SystemResponsiveness=10)"
+    if (-not $DryRun) { Write-Fix "Network throttling disabled (SystemResponsiveness=10)" }
 
     Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "MaxCacheTtl" 86400
     Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" "MaxNegativeCacheTtl" 5
