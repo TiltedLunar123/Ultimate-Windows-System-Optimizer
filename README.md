@@ -19,9 +19,9 @@ A PowerShell script that analyzes Windows 10/11 systems and applies intelligent,
 - **Explorer improvements** - shows file extensions, disables Bing search in Start Menu, speeds up menus, opens to This PC
 - **SSD-specific tuning** - disables Prefetch/Superfetch, enables TRIM, reduces unnecessary writes
 - **Scheduled task cleanup** - disables compatibility appraiser, CEIP, disk diagnostics, maps updates, and error reporting tasks
-- **Boot optimization** - enables Fast Startup, reduces boot timeout, enables verbose boot messages
+- **Boot optimization** - reduces boot timeout, enables verbose boot messages, and enables Fast Startup only when Windows is the only OS in the boot menu
 - **Security hardening** - disables Remote Desktop, Remote Assistance, SMBv1, and AutoRun; verifies Windows Firewall is enabled
-- **Context-aware safety** - skips changes that would break detected hardware or active sessions (Outlook, RDP, printers, touchscreens)
+- **Context-aware safety** - skips changes that would break detected hardware, installed apps, or active sessions (Outlook, Teams, OneNote, RDP, printers, touchscreens, dual-boot setups)
 - **Undo/rollback** - exports all registry changes to a JSON file that can restore previous values
 - **Dry run mode** - preview all changes without modifying anything
 - **Selective optimization** - run only specific sections or skip sections you don't want
@@ -45,12 +45,41 @@ irm https://raw.githubusercontent.com/TiltedLunar123/Ultimate-Windows-System-Opt
 
 That's it. The script will:
 1. Request administrator privileges (UAC prompt)
-2. Download the latest version
-3. Create a System Restore Point so changes can be rolled back
-4. Analyze your system
-5. Apply all optimizations
-6. Show before/after health scores
-7. Clean up temp files
+2. Resolve the current commit on `main` and print it
+3. Download that exact commit and print the archive's SHA-256
+4. Create a System Restore Point so changes can be rolled back
+5. Analyze your system
+6. Apply all optimizations
+7. Show before/after health scores
+8. Clean up temp files
+
+### About that one-liner
+
+Piping a script off the internet straight into `iex` and letting it elevate
+means you are handing full administrator access to whatever that URL serves at
+the moment you run it. That is worth being uncomfortable about, here or
+anywhere else. I cannot sign the script (no code-signing certificate), so
+instead of pretending the risk away, the installer does what it actually can:
+
+- It asks the GitHub API which commit `main` points at, then downloads that
+  commit rather than the branch tip, so the code cannot change between the
+  moment you read it and the moment it runs.
+- It prints the commit SHA and a link to that commit before downloading.
+- It prints the SHA-256 of the archive it fetched, so you can compare across
+  machines or against your own download.
+
+If you want to pin a revision you have already read, set `UWSO_COMMIT` to the
+short SHA GitHub shows you. The installer stops before downloading anything if
+`main` has moved on:
+
+```powershell
+$env:UWSO_COMMIT = 'a1b2c3d'; irm https://raw.githubusercontent.com/TiltedLunar123/Ultimate-Windows-System-Optimizer/main/run.ps1 | iex
+```
+
+None of this protects you if the repository or my account is compromised. If
+that matters for the machine you are on, clone it, read it, and run it from the
+clone. The manual instructions below do exactly that, and the optimizer is the
+same either way.
 
 ## Manual Usage
 
