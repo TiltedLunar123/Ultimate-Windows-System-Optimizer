@@ -1,5 +1,54 @@
 # Analysis.psm1 - Phase 1: System analysis and health scoring
 
+function Get-SearchDependentApp {
+    # Windows Search backs more than Outlook. Teams and OneNote both query the
+    # index for message and note search, and the new Outlook is built on it
+    # outright. Disabling WSearch under any of them turns search into a stub
+    # with no warning, which is what issue #20 was about.
+    #
+    # Returns the display name of the first dependent app found, or $null when
+    # the machine has none of them.
+    [CmdletBinding()]
+    param()
+
+    # Classic Office, both bitnesses. Test-Path does not expand wildcards in
+    # the registry provider, so walk the version subkeys (15.0, 16.0, ...) and
+    # look for the app key explicitly.
+    $officeApps = [ordered]@{ 'Outlook' = 'Outlook'; 'OneNote' = 'OneNote' }
+    foreach ($officeRoot in @("HKLM:\SOFTWARE\Microsoft\Office", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office")) {
+        if (-not (Test-Path $officeRoot)) { continue }
+        foreach ($vk in (Get-ChildItem $officeRoot -ErrorAction SilentlyContinue)) {
+            foreach ($key in $officeApps.Keys) {
+                if (Test-Path (Join-Path $vk.PSPath $key)) { return $officeApps[$key] }
+            }
+        }
+    }
+
+    # Store and MSIX builds of the same apps, plus Teams.
+    if (Get-Command Get-AppxPackage -ErrorAction SilentlyContinue) {
+        $packaged = @(
+            @{ Match = 'MSTeams|MicrosoftTeams';               Name = 'Microsoft Teams' }
+            @{ Match = 'Microsoft\.OutlookForWindows';         Name = 'Outlook' }
+            @{ Match = 'Microsoft\.Office\.OneNote';           Name = 'OneNote' }
+            @{ Match = 'microsoft\.windowscommunicationsapps'; Name = 'Mail and Calendar' }
+        )
+        try {
+            $installed = @(Get-AppxPackage -ErrorAction Stop | Select-Object -ExpandProperty Name)
+            foreach ($p in $packaged) {
+                if (@($installed | Where-Object { $_ -match $p.Match }).Count -gt 0) { return $p.Name }
+            }
+        } catch { $null = $_ }
+    }
+
+    # Teams classic installs per-user and sits outside the package model.
+    if ($env:LOCALAPPDATA) {
+        $teamsExe = Join-Path $env:LOCALAPPDATA 'Microsoft\Teams\current\Teams.exe'
+        if (Test-Path -LiteralPath $teamsExe) { return 'Microsoft Teams' }
+    }
+
+    return $null
+}
+
 function Get-StartupItem {
     # Returns the union of registry Run/RunOnce entries, the user's
     # Startup folder shortcuts, and scheduled tasks with a logon
@@ -260,24 +309,18 @@ function Get-SystemAnalysis {
         $bloatServices = $bloatServices | Where-Object { $_.Name -ne "SysMain" }
     }
 
-    # Context-aware: don't flag WSearch if Outlook is installed.
-    # Test-Path doesn't expand wildcards in registry providers, so we walk the
-    # version subkeys (15.0, 16.0, ...) and look for an Outlook child explicitly.
-    $outlookInstalled = $false
-    foreach ($officeRoot in @("HKLM:\SOFTWARE\Microsoft\Office", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office")) {
-        if (-not (Test-Path $officeRoot)) { continue }
-        $versionKeys = Get-ChildItem $officeRoot -ErrorAction SilentlyContinue
-        foreach ($vk in $versionKeys) {
-            if (Test-Path (Join-Path $vk.PSPath "Outlook")) {
-                $outlookInstalled = $true
-                break
-            }
-        }
-        if ($outlookInstalled) { break }
-    }
-    if ($outlookInstalled) {
+    # Context-aware: keep WSearch when anything that queries the index is
+    # installed. This used to check Outlook only, which left Teams, OneNote
+    # and the new Outlook to lose their search silently.
+    $searchApp = Get-SearchDependentApp
+    if ($searchApp) {
         $bloatServices = $bloatServices | Where-Object { $_.Name -ne "WSearch" }
-        Write-Info "Outlook detected" "Keeping Windows Search Indexer"
+        Write-Info "$searchApp detected" "Keeping Windows Search Indexer"
+    } elseif (@($bloatServices | Where-Object { $_.Name -eq "WSearch" }).Count -gt 0) {
+        # Nothing found that hard-depends on the index, but Start Menu and
+        # Explorer search both get slower without it. Say so rather than
+        # letting people find out after the reboot.
+        Write-Warn "Turning off Windows Search will slow Start Menu and File Explorer searches"
     }
 
     # Context-aware: don't flag TabletInputService if touchscreen detected
@@ -464,4 +507,5 @@ function Get-HealthScore {
     return [math]::Max(0, [math]::Min(100, $score))
 }
 
-Export-ModuleMember -Function Get-SystemAnalysis, Get-HealthScore, Get-StartupItem
+Export-ModuleMember -Function Get-SystemAnalysis, Get-HealthScore, Get-StartupItem,
+    Get-SearchDependentApp

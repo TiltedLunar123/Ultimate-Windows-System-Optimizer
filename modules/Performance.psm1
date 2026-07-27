@@ -246,6 +246,57 @@ function Invoke-ScheduledTasksOptimization {
     }
 }
 
+function Get-BootConfigurationText {
+    # Thin wrapper around bcdedit so the dual-boot check has a seam the tests
+    # can stand in for. Returns the raw enum text, or $null if the call blew up.
+    [CmdletBinding()]
+    param()
+
+    try {
+        $raw = bcdedit /enum all 2>&1
+        return ($raw | Out-String)
+    } catch {
+        return $null
+    }
+}
+
+function Test-DualBootSystem {
+    # Fast Startup does not shut Windows down, it hibernates the kernel. That
+    # leaves every mounted NTFS volume flagged dirty. Boot into Linux, mount
+    # the same partition read-write, and you can lose the filesystem. So look
+    # for a boot entry that is not Windows before touching the setting.
+    #
+    # Three-state on purpose: $true for dual boot, $false for Windows only, and
+    # $null when bcdedit could not be read at all. Callers treat $null the same
+    # as $true and leave Fast Startup alone, because guessing wrong in that
+    # direction costs a reboot and guessing wrong the other way costs data.
+    [CmdletBinding()]
+    param()
+
+    $text = Get-BootConfigurationText
+    if ([string]::IsNullOrWhiteSpace($text)) { return $null }
+
+    # A real enum always prints identifier lines. Anything else (access
+    # denied, bcdedit missing, a localized failure string) is unreadable.
+    if ($text -notmatch '(?im)^\s*identifier\s') { return $null }
+
+    # Loader names and descriptions that only show up when something other
+    # than Windows is in the boot menu. Short generic words are anchored so
+    # they cannot match a substring of a Windows path.
+    $foreign = 'grub|\bubuntu\b|\bdebian\b|\bfedora\b|linux|\bopensuse\b|\bsuse\b|\barch\b|' +
+               '\bmanjaro\b|\bmint\b|pop!?_?os|\belementary\b|\bzorin\b|\bkali\b|\bcentos\b|' +
+               '\brhel\b|refind|systemd-boot|shim(x64|ia32|aa64)?\.efi|grubx64\.efi|' +
+               '\bmac ?os\b|\bos ?x\b|\bfreebsd\b'
+
+    foreach ($line in ($text -split "`r?`n")) {
+        if ($line -match '^\s*(description|path|device)\s+(.+)$') {
+            if ($Matches[2] -match $foreign) { return $true }
+        }
+    }
+
+    return $false
+}
+
 function Invoke-BootOptimization {
     param([hashtable]$Analysis)
 
@@ -254,8 +305,15 @@ function Invoke-BootOptimization {
 
     Write-Host "`n    -- Boot Optimization --" -ForegroundColor Cyan
 
-    Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" "HiberbootEnabled" 1
-    if (-not $DryRun) { Write-Fix "Fast Startup enabled" }
+    $dualBoot = Test-DualBootSystem
+    if ($dualBoot -eq $true) {
+        Write-Skip "Fast Startup left off: another OS is in the boot menu and hibernated NTFS volumes can be corrupted by it"
+    } elseif ($null -eq $dualBoot) {
+        Write-Skip "Fast Startup left alone: could not read the boot configuration to rule out a second OS"
+    } else {
+        Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" "HiberbootEnabled" 1
+        if (-not $DryRun) { Write-Fix "Fast Startup enabled" }
+    }
 
     if ($DryRun) {
         Write-Dry "Would reduce boot menu timeout to 3 seconds"
@@ -408,4 +466,5 @@ function Invoke-FeaturesOptimization {
 Export-ModuleMember -Function Invoke-PowerOptimization, Invoke-VisualEffectsOptimization,
     Invoke-PerformanceOptimization, Invoke-SSDOptimization, Invoke-MemoryOptimization,
     Invoke-ScheduledTasksOptimization, Invoke-BootOptimization, Invoke-BackgroundAppsOptimization,
-    Invoke-NotificationsOptimization, Invoke-DiskOptimization, Invoke-FeaturesOptimization
+    Invoke-NotificationsOptimization, Invoke-DiskOptimization, Invoke-FeaturesOptimization,
+    Get-BootConfigurationText, Test-DualBootSystem

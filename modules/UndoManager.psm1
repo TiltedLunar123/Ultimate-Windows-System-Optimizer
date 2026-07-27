@@ -1,6 +1,91 @@
-# UndoManager.psm1 - Save and restore registry state for rollback
+# UndoManager.psm1 - Save and restore state for rollback
+#
+# Entries carry a Kind so the file can hold more than registry values.
+# 'Registry' is the original shape and stays the default when the field is
+# missing, which is what old undo files look like. 'Service' was added for
+# issue #2. Scheduled tasks, optional features and bcdedit are still not
+# covered; see the rollback section of the README.
 
 $script:UndoEntries = [System.Collections.Generic.List[hashtable]]::new()
+
+function Get-UndoEntryKind {
+    # Undo files written before Kind existed are all registry entries.
+    param($Entry)
+
+    if ($Entry -is [hashtable]) {
+        if ($Entry.ContainsKey('Kind') -and $Entry.Kind) { return [string]$Entry.Kind }
+        return 'Registry'
+    }
+    if ($Entry -and $Entry.PSObject.Properties['Kind'] -and $Entry.Kind) { return [string]$Entry.Kind }
+    return 'Registry'
+}
+
+function Save-ServiceState {
+    # Record what a service looked like before the optimizer disables it.
+    # Startup type alone is not enough: a service that was running needs to
+    # be started again, or undo leaves it configured correctly and dead.
+    param(
+        [string]$Name,
+        [string]$NewStartupType = 'Disabled'
+    )
+
+    $entry = @{
+        Kind       = 'Service'
+        Path       = "Service:\$Name"
+        Name       = $Name
+        NewValue   = $NewStartupType
+        Type       = 'Service'
+        OldValue   = $null
+        Existed    = $false
+        WasRunning = $false
+    }
+
+    try {
+        $svc = Get-Service -Name $Name -ErrorAction Stop
+        $entry.OldValue   = [string]$svc.StartType
+        $entry.WasRunning = ($svc.Status -eq 'Running')
+        $entry.Existed    = $true
+    } catch {
+        $null = $_  # Service isn't installed on this machine, nothing to put back.
+    }
+
+    $script:UndoEntries.Add($entry)
+}
+
+function Restore-ServiceState {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [string]$Name,
+        [string]$StartupType,
+        [bool]$WasRunning
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name) -or [string]::IsNullOrWhiteSpace($StartupType)) { return $false }
+    if (-not $PSCmdlet.ShouldProcess($Name, "Restore startup type to $StartupType")) { return $false }
+
+    try {
+        try {
+            Set-Service -Name $Name -StartupType $StartupType -ErrorAction Stop
+        } catch {
+            # Windows PowerShell 5.1 has no AutomaticDelayedStart value for
+            # -StartupType even though Get-Service reports it. Automatic is
+            # the closest thing that will actually apply.
+            if ($StartupType -eq 'AutomaticDelayedStart') {
+                Set-Service -Name $Name -StartupType Automatic -ErrorAction Stop
+            } else {
+                throw
+            }
+        }
+
+        if ($WasRunning) {
+            Start-Service -Name $Name -ErrorAction Stop
+        }
+        return $true
+    } catch {
+        Write-Warning "Failed to restore service ${Name}: $_"
+        return $false
+    }
+}
 
 function Save-RegistryState {
     param(
@@ -58,13 +143,15 @@ function Export-UndoFile {
     $exportData = @()
     foreach ($e in $script:UndoEntries) {
         $exportData += @{
-            Path     = $e.Path
-            Name     = $e.Name
-            NewValue = if ($e.NewValue -is [byte[]]) { [Convert]::ToBase64String($e.NewValue) } else { $e.NewValue }
-            Type     = $e.Type
-            OldValue = if ($e.OldValue -is [byte[]]) { [Convert]::ToBase64String($e.OldValue) } else { $e.OldValue }
-            Existed  = $e.Existed
-            IsBase64 = ($e.OldValue -is [byte[]] -or $e.NewValue -is [byte[]])
+            Kind       = Get-UndoEntryKind -Entry $e
+            Path       = $e.Path
+            Name       = $e.Name
+            NewValue   = if ($e.NewValue -is [byte[]]) { [Convert]::ToBase64String($e.NewValue) } else { $e.NewValue }
+            Type       = $e.Type
+            OldValue   = if ($e.OldValue -is [byte[]]) { [Convert]::ToBase64String($e.OldValue) } else { $e.OldValue }
+            Existed    = $e.Existed
+            IsBase64   = ($e.OldValue -is [byte[]] -or $e.NewValue -is [byte[]])
+            WasRunning = if ($e.ContainsKey('WasRunning')) { [bool]$e.WasRunning } else { $false }
         }
     }
 
@@ -124,9 +211,26 @@ function Restore-FromUndoFile {
     $entries = Get-Content -Path $FilePath -Raw | ConvertFrom-Json
     $restored = 0
     $failed = 0
+    $skipped = 0
 
     foreach ($entry in $entries) {
         try {
+            if ((Get-UndoEntryKind -Entry $entry) -eq 'Service') {
+                if (-not $entry.Existed) {
+                    # The service was not installed when the run happened, so
+                    # there is no prior state to put back.
+                    $skipped++
+                    continue
+                }
+                $wasRunning = [bool]($entry.PSObject.Properties['WasRunning'] -and $entry.WasRunning)
+                if (Restore-ServiceState -Name $entry.Name -StartupType ([string]$entry.OldValue) -WasRunning $wasRunning) {
+                    $restored++
+                } else {
+                    $failed++
+                }
+                continue
+            }
+
             if ($entry.Existed) {
                 $value = $entry.OldValue
                 if ($entry.IsBase64 -and $value -is [string]) {
@@ -153,7 +257,9 @@ function Restore-FromUndoFile {
     }
 
     Write-Host ""
-    Write-Host "    Undo complete: $restored restored, $failed failed out of $($entries.Count) entries." -ForegroundColor Cyan
+    $summary = "    Undo complete: $restored restored, $failed failed out of $($entries.Count) entries."
+    if ($skipped -gt 0) { $summary += " $skipped had nothing to restore." }
+    Write-Host $summary -ForegroundColor Cyan
     return ($failed -eq 0)
 }
 
@@ -166,4 +272,5 @@ function Clear-UndoEntry {
 }
 
 Export-ModuleMember -Function Save-RegistryState, Export-UndoFile, Restore-FromUndoFile,
-    Get-UndoEntry, Clear-UndoEntry, Set-UndoFileAcl
+    Get-UndoEntry, Clear-UndoEntry, Set-UndoFileAcl,
+    Save-ServiceState, Restore-ServiceState, Get-UndoEntryKind

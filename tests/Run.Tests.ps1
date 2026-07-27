@@ -64,3 +64,101 @@ Describe "Get-ElevationArgumentString" {
         }
     }
 }
+
+Describe "Commit pinning and archive URLs (issue #11)" {
+    # The one-liner still downloads and runs code as admin, which no amount of
+    # scripting makes safe on its own. What it can do is stop being a moving
+    # target: resolve a commit, fetch that exact revision, and refuse anything
+    # the caller did not ask for.
+
+    Context "Get-RepositoryArchiveUrl" {
+        It "Should download a specific commit when one is known" {
+            $url = Get-RepositoryArchiveUrl -CommitSha "0123456789abcdef0123456789abcdef01234567"
+            $url | Should -BeLike "*/archive/0123456789abcdef0123456789abcdef01234567.zip"
+        }
+
+        It "Should fall back to the branch tip when no commit was resolved" {
+            Get-RepositoryArchiveUrl -CommitSha "" | Should -BeLike "*/archive/refs/heads/main.zip"
+        }
+
+        It "Should stay on github.com either way" {
+            (Get-RepositoryArchiveUrl -CommitSha "abc1234") | Should -BeLike "https://github.com/*"
+            (Get-RepositoryArchiveUrl -CommitSha $null)     | Should -BeLike "https://github.com/*"
+        }
+    }
+
+    Context "Test-CommitMatch" {
+        It "Should pass when nothing was pinned" {
+            Test-CommitMatch -Expected "" -Actual "abcdef1234567890" | Should -BeTrue
+        }
+
+        It "Should accept the short SHA GitHub displays" {
+            Test-CommitMatch -Expected "abcdef1" -Actual "abcdef1234567890" | Should -BeTrue
+        }
+
+        It "Should ignore case" {
+            Test-CommitMatch -Expected "ABCDEF1" -Actual "abcdef1234567890" | Should -BeTrue
+        }
+
+        It "Should reject a different commit" {
+            Test-CommitMatch -Expected "9999999" -Actual "abcdef1234567890" | Should -BeFalse
+        }
+
+        It "Should fail closed when the commit could not be resolved" {
+            Test-CommitMatch -Expected "abcdef1" -Actual $null | Should -BeFalse
+        }
+
+        It "Should refuse a prefix too short to mean anything" {
+            Test-CommitMatch -Expected "ab" -Actual "abcdef1234567890" | Should -BeFalse
+        }
+    }
+
+    Context "Get-FileSha256" {
+        It "Should hash a file that exists" {
+            $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("uwso_hash_" + [Guid]::NewGuid().ToString('N'))
+            Set-Content -LiteralPath $tmp -Value 'uwso' -NoNewline
+            try {
+                Get-FileSha256 -Path $tmp | Should -Match '^[0-9A-F]{64}$'
+            } finally {
+                Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "Should return nothing for a path that is not there" {
+            $missing = Join-Path ([System.IO.Path]::GetTempPath()) ("uwso_nohash_" + [Guid]::NewGuid().ToString('N'))
+            Get-FileSha256 -Path $missing | Should -BeNullOrEmpty
+        }
+    }
+
+    Context "carrying the pin through elevation" {
+        It "Should pass the commit to the elevated -File relaunch" {
+            $localCopy = Join-Path ([System.IO.Path]::GetTempPath()) ("uwso_run_" + [Guid]::NewGuid().ToString('N') + ".ps1")
+            Set-Content -LiteralPath $localCopy -Value '# stand-in for run.ps1'
+            try {
+                $result = Get-ElevationArgumentString -LocalScriptPath $localCopy -ExpectedCommit "abcdef1"
+                $result | Should -BeLike "*-ExpectedCommit `"abcdef1`"*"
+            } finally {
+                Remove-Item -LiteralPath $localCopy -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "Should encode the commit into the piped fallback" {
+            $result = Get-ElevationArgumentString -LocalScriptPath "" -ExpectedCommit "abcdef1"
+            $encoded = ($result -split '-EncodedCommand ')[-1].Trim()
+            $decoded = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))
+            $decoded | Should -BeLike "*UWSO_COMMIT = 'abcdef1'*"
+        }
+
+        It "Should leave both opt-ins out when neither was asked for" {
+            $localCopy = Join-Path ([System.IO.Path]::GetTempPath()) ("uwso_run_" + [Guid]::NewGuid().ToString('N') + ".ps1")
+            Set-Content -LiteralPath $localCopy -Value '# stand-in for run.ps1'
+            try {
+                $result = Get-ElevationArgumentString -LocalScriptPath $localCopy
+                $result | Should -Not -BeLike "*-ExpectedCommit*"
+                $result | Should -Not -BeLike "*-Auto*"
+            } finally {
+                Remove-Item -LiteralPath $localCopy -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}

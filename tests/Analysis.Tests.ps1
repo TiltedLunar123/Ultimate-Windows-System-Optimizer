@@ -262,3 +262,53 @@ Describe "Get-StartupItem" {
         }
     }
 }
+
+Describe "Search-dependent app detection (issue #20)" {
+    # The old check only looked for classic Outlook, so a machine running
+    # Teams, OneNote or the new Outlook got its search index turned off and
+    # found out later. Every probe is mocked here: no registry read, no Appx
+    # enumeration, no disk hit.
+    BeforeEach {
+        Mock -ModuleName Analysis Test-Path { $false }
+        Mock -ModuleName Analysis Get-AppxPackage { @() }
+    }
+
+    It "returns nothing when no search-dependent app is installed" {
+        Get-SearchDependentApp | Should -BeNullOrEmpty
+    }
+
+    It "detects the packaged Teams client" {
+        Mock -ModuleName Analysis Get-AppxPackage { [pscustomobject]@{ Name = 'MSTeams' } }
+        Get-SearchDependentApp | Should -Be 'Microsoft Teams'
+    }
+
+    It "detects the new Outlook" {
+        Mock -ModuleName Analysis Get-AppxPackage { [pscustomobject]@{ Name = 'Microsoft.OutlookForWindows' } }
+        Get-SearchDependentApp | Should -Be 'Outlook'
+    }
+
+    It "detects OneNote from the Store" {
+        Mock -ModuleName Analysis Get-AppxPackage { [pscustomobject]@{ Name = 'Microsoft.Office.OneNote' } }
+        Get-SearchDependentApp | Should -Be 'OneNote'
+    }
+
+    It "ignores packages that have nothing to do with the index" {
+        Mock -ModuleName Analysis Get-AppxPackage { [pscustomobject]@{ Name = 'Microsoft.XboxGamingOverlay' } }
+        Get-SearchDependentApp | Should -BeNullOrEmpty
+    }
+
+    It "still finds classic Outlook under the Office key" {
+        Mock -ModuleName Analysis Test-Path { $true }
+        Mock -ModuleName Analysis Get-ChildItem {
+            [pscustomobject]@{ PSPath = 'HKLM:\SOFTWARE\Microsoft\Office\16.0' }
+        }
+        Get-SearchDependentApp | Should -Be 'Outlook'
+    }
+
+    It "finds Teams when it is installed the classic per-user way" {
+        Mock -ModuleName Analysis Test-Path { $true } -ParameterFilter {
+            $LiteralPath -like '*Microsoft\Teams\current\Teams.exe'
+        }
+        Get-SearchDependentApp | Should -Be 'Microsoft Teams'
+    }
+}

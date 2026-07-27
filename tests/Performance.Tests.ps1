@@ -85,3 +85,107 @@ Describe "Performance module still counts fixes in a real run" {
         Get-FixCount | Should -Be 1
     }
 }
+
+Describe "Dual-boot detection (issue #22)" {
+    # Trimmed but structurally real bcdedit output. The Windows-only sample
+    # matters as much as the dual-boot one: \Windows\system32\winload.efi and
+    # \EFI\Microsoft\Boot\bootmgfw.efi must not trip the foreign-loader match.
+    BeforeAll {
+        $script:WindowsOnlyBcd = @"
+Windows Boot Manager
+--------------------
+identifier              {bootmgr}
+device                  partition=\Device\HarddiskVolume1
+path                    \EFI\Microsoft\Boot\bootmgfw.efi
+description             Windows Boot Manager
+
+Windows Boot Loader
+-------------------
+identifier              {current}
+device                  partition=C:
+path                    \Windows\system32\winload.efi
+description             Windows 11
+"@
+
+        $script:DualBootBcd = $script:WindowsOnlyBcd + @"
+
+Firmware Application (101fffff)
+-------------------------------
+identifier              {7619dcc8-fafe-11d9-b411-000476eba25f}
+device                  partition=\Device\HarddiskVolume1
+path                    \EFI\ubuntu\shimx64.efi
+description             ubuntu
+"@
+    }
+
+    It "returns false when only Windows entries are present" {
+        Mock -ModuleName Performance Get-BootConfigurationText { $script:WindowsOnlyBcd }
+        Test-DualBootSystem | Should -BeFalse
+    }
+
+    It "returns true when a non-Windows loader is in the boot menu" {
+        Mock -ModuleName Performance Get-BootConfigurationText { $script:DualBootBcd }
+        Test-DualBootSystem | Should -BeTrue
+    }
+
+    It "returns null when bcdedit could not be read" {
+        Mock -ModuleName Performance Get-BootConfigurationText { "Access is denied." }
+        Test-DualBootSystem | Should -BeNullOrEmpty
+    }
+
+    It "returns null on empty output" {
+        Mock -ModuleName Performance Get-BootConfigurationText { "" }
+        Test-DualBootSystem | Should -BeNullOrEmpty
+    }
+}
+
+Describe "Fast Startup respects the dual-boot check (issue #22)" {
+    BeforeEach {
+        Clear-UndoEntry
+        Reset-FixCounter
+        Set-DryRunMode $true
+    }
+
+    AfterAll {
+        Set-DryRunMode $false
+        Clear-UndoEntry
+        Reset-FixCounter
+    }
+
+    It "stages HiberbootEnabled on a Windows-only machine" {
+        Mock -ModuleName Performance Test-DualBootSystem { $false }
+        Invoke-BootOptimization -Analysis $script:Analysis | Out-Null
+        $entries = Get-UndoEntry
+        @($entries | Where-Object { $_.Name -eq 'HiberbootEnabled' }).Count | Should -Be 1
+    }
+
+    It "does not touch HiberbootEnabled when a second OS is detected" {
+        Mock -ModuleName Performance Test-DualBootSystem { $true }
+        Invoke-BootOptimization -Analysis $script:Analysis | Out-Null
+        $entries = Get-UndoEntry
+        @($entries | Where-Object { $_.Name -eq 'HiberbootEnabled' }).Count | Should -Be 0
+    }
+
+    It "says why it skipped on a dual-boot machine" {
+        Mock -ModuleName Performance Test-DualBootSystem { $true }
+        Invoke-BootOptimization -Analysis $script:Analysis | Out-Null
+        $report = Get-Report
+        ($report -join "`n") | Should -Match '\[SKIP\] Fast Startup left off'
+    }
+
+    It "leaves the setting alone when the boot config is unreadable" {
+        Mock -ModuleName Performance Test-DualBootSystem { $null }
+        Invoke-BootOptimization -Analysis $script:Analysis | Out-Null
+        $entries = Get-UndoEntry
+        @($entries | Where-Object { $_.Name -eq 'HiberbootEnabled' }).Count | Should -Be 0
+        $report = Get-Report
+        ($report -join "`n") | Should -Match '\[SKIP\] Fast Startup left alone'
+    }
+
+    It "still applies the other boot tweaks either way" {
+        Mock -ModuleName Performance Test-DualBootSystem { $true }
+        Invoke-BootOptimization -Analysis $script:Analysis | Out-Null
+        $entries = Get-UndoEntry
+        @($entries | Where-Object { $_.Name -eq 'VerboseStatus' }).Count | Should -Be 1
+    }
+}
