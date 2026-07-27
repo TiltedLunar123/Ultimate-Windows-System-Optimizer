@@ -151,3 +151,103 @@ Describe "Undo File Restore" {
         Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
     }
 }
+
+Describe "Service entries in the undo file (issue #2)" {
+    BeforeEach {
+        Clear-UndoEntry
+    }
+
+    AfterAll {
+        Clear-UndoEntry
+    }
+
+    It "Should record the startup type and running state" {
+        Mock -ModuleName UndoManager Get-Service {
+            [pscustomobject]@{ Name = 'WSearch'; StartType = 'Automatic'; Status = 'Running' }
+        }
+        Save-ServiceState -Name 'WSearch'
+        $entries = Get-UndoEntry
+        $entries[0].Kind       | Should -Be 'Service'
+        $entries[0].OldValue   | Should -Be 'Automatic'
+        $entries[0].WasRunning | Should -BeTrue
+        $entries[0].Existed    | Should -BeTrue
+    }
+
+    It "Should mark a missing service as having no prior state" {
+        Mock -ModuleName UndoManager Get-Service { throw "not installed" }
+        Save-ServiceState -Name 'NotARealService'
+        $entries = Get-UndoEntry
+        $entries[0].Existed | Should -BeFalse
+    }
+
+    It "Should carry Kind and WasRunning into the exported JSON" {
+        Mock -ModuleName UndoManager Get-Service {
+            [pscustomobject]@{ Name = 'SysMain'; StartType = 'Manual'; Status = 'Stopped' }
+        }
+        Save-ServiceState -Name 'SysMain'
+        $filePath = Export-UndoFile -OutputDir $env:TEMP
+        try {
+            $content = Get-Content $filePath -Raw | ConvertFrom-Json
+            $content[0].Kind       | Should -Be 'Service'
+            $content[0].OldValue   | Should -Be 'Manual'
+            $content[0].WasRunning | Should -BeFalse
+        } finally {
+            Remove-Item $filePath -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "Should treat an entry with no Kind as a registry entry" {
+        $legacy = [pscustomobject]@{ Path = "HKCU:\X"; Name = "Y"; Existed = $false }
+        Get-UndoEntryKind -Entry $legacy | Should -Be 'Registry'
+    }
+
+    It "Should route service entries to the service restore path" {
+        Mock -ModuleName UndoManager Restore-ServiceState { $true }
+        $tempFile = Join-Path $env:TEMP "test_undo_svc_$(Get-Random).json"
+        $data = @(
+            @{ Kind = 'Service'; Path = 'Service:\DiagTrack'; Name = 'DiagTrack'
+               NewValue = 'Disabled'; OldValue = 'Automatic'; Type = 'Service'
+               Existed = $true; IsBase64 = $false; WasRunning = $true }
+        )
+        $data | ConvertTo-Json -Depth 5 | Out-File $tempFile -Encoding UTF8
+        try {
+            Restore-FromUndoFile -FilePath $tempFile | Should -BeTrue
+            Should -Invoke -ModuleName UndoManager Restore-ServiceState -Times 1
+        } finally {
+            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "Should not count a service that was never installed as a failure" {
+        Mock -ModuleName UndoManager Restore-ServiceState { $false }
+        $tempFile = Join-Path $env:TEMP "test_undo_svc_missing_$(Get-Random).json"
+        $data = @(
+            @{ Kind = 'Service'; Path = 'Service:\Ghost'; Name = 'Ghost'
+               NewValue = 'Disabled'; OldValue = $null; Type = 'Service'
+               Existed = $false; IsBase64 = $false; WasRunning = $false }
+        )
+        $data | ConvertTo-Json -Depth 5 | Out-File $tempFile -Encoding UTF8
+        try {
+            Restore-FromUndoFile -FilePath $tempFile | Should -BeTrue
+            Should -Invoke -ModuleName UndoManager Restore-ServiceState -Times 0
+        } finally {
+            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "Should report a failed service restore" {
+        Mock -ModuleName UndoManager Restore-ServiceState { $false }
+        $tempFile = Join-Path $env:TEMP "test_undo_svc_fail_$(Get-Random).json"
+        $data = @(
+            @{ Kind = 'Service'; Path = 'Service:\DiagTrack'; Name = 'DiagTrack'
+               NewValue = 'Disabled'; OldValue = 'Automatic'; Type = 'Service'
+               Existed = $true; IsBase64 = $false; WasRunning = $false }
+        )
+        $data | ConvertTo-Json -Depth 5 | Out-File $tempFile -Encoding UTF8
+        try {
+            Restore-FromUndoFile -FilePath $tempFile | Should -BeFalse
+        } finally {
+            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+}

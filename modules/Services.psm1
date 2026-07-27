@@ -9,6 +9,11 @@ function Invoke-ServicesOptimization {
 
     if ($Analysis.ServicesToDisable.Count -gt 0) {
         foreach ($svc in $Analysis.ServicesToDisable) {
+            # Record the current startup type and running state first, the same
+            # way Set-RegValue stages a registry write. Issue #2: without this
+            # the undo file had no idea any service had ever been touched.
+            Save-ServiceState -Name $svc.Name -NewStartupType 'Disabled'
+
             if ($DryRun) {
                 Write-Dry "Would disable service: $($svc.Desc) ($($svc.Name))"
                 continue

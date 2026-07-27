@@ -1,8 +1,9 @@
 BeforeAll {
     $modulesPath = Join-Path $PSScriptRoot "..\modules"
-    Import-Module (Join-Path $modulesPath "UI.psm1")       -Force -DisableNameChecking
-    Import-Module (Join-Path $modulesPath "Config.psm1")   -Force -DisableNameChecking
-    Import-Module (Join-Path $modulesPath "Services.psm1") -Force -DisableNameChecking
+    Import-Module (Join-Path $modulesPath "UI.psm1")          -Force -DisableNameChecking
+    Import-Module (Join-Path $modulesPath "UndoManager.psm1") -Force -DisableNameChecking
+    Import-Module (Join-Path $modulesPath "Config.psm1")      -Force -DisableNameChecking
+    Import-Module (Join-Path $modulesPath "Services.psm1")    -Force -DisableNameChecking
 
     $script:sampleServices = @(
         [pscustomobject]@{ Name = 'DiagTrack';   Desc = 'Connected User Experiences and Telemetry' }
@@ -68,5 +69,58 @@ Describe "Invoke-ServicesOptimization outside DryRun" {
         Invoke-ServicesOptimization -Analysis @{ ServicesToDisable = @() } | Out-Null
         Get-FixCount | Should -Be 0
         Should -Invoke -ModuleName Services Stop-Service -Times 0
+    }
+}
+
+Describe "Service changes reach the undo file (issue #2)" {
+    # Undo used to cover registry values only, so a run that disabled a dozen
+    # services left the user to put every one of them back by hand. Get-Service
+    # is mocked so the assertions do not depend on what happens to be installed
+    # on the machine running the suite.
+    BeforeEach {
+        Clear-UndoEntry
+        Reset-FixCounter
+        Set-DryRunMode $false
+        Mock -ModuleName Services Stop-Service {}
+        Mock -ModuleName Services Set-Service  {}
+        Mock -ModuleName UndoManager Get-Service {
+            [pscustomobject]@{ Name = 'DiagTrack'; StartType = 'Automatic'; Status = 'Running' }
+        }
+    }
+
+    AfterAll {
+        Clear-UndoEntry
+        Reset-FixCounter
+        Set-DryRunMode $false
+    }
+
+    It "stages one service entry per service it disables" {
+        Invoke-ServicesOptimization -Analysis @{ ServicesToDisable = $script:sampleServices } | Out-Null
+        $entries = Get-UndoEntry
+        @($entries | Where-Object { $_.Kind -eq 'Service' }).Count | Should -Be $script:sampleServices.Count
+    }
+
+    It "keeps the startup type it found so undo can put it back" {
+        Invoke-ServicesOptimization -Analysis @{ ServicesToDisable = $script:sampleServices } | Out-Null
+        $entries = Get-UndoEntry
+        $entry = $entries | Where-Object { $_.Name -eq 'DiagTrack' } | Select-Object -First 1
+        $entry.OldValue | Should -Be 'Automatic'
+        $entry.WasRunning | Should -BeTrue
+    }
+
+    It "stages the same entries during a dry run, so the preview is honest" {
+        Set-DryRunMode $true
+        Invoke-ServicesOptimization -Analysis @{ ServicesToDisable = $script:sampleServices } | Out-Null
+        $entries = Get-UndoEntry
+        @($entries | Where-Object { $_.Kind -eq 'Service' }).Count | Should -Be $script:sampleServices.Count
+        Should -Invoke -ModuleName Services Stop-Service -Times 0
+    }
+
+    It "marks a service that is not installed as having nothing to restore" {
+        Mock -ModuleName UndoManager Get-Service { throw "no such service" }
+        Invoke-ServicesOptimization -Analysis @{ ServicesToDisable = $script:sampleServices } | Out-Null
+        $entries = Get-UndoEntry
+        $entry = $entries | Where-Object { $_.Kind -eq 'Service' } | Select-Object -First 1
+        $entry.Existed | Should -BeFalse
     }
 }

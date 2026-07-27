@@ -25,7 +25,9 @@
     Show what changes WOULD be made without actually modifying anything.
 
 .PARAMETER Undo
-    Path to a previously generated undo JSON file. Restores all registry values.
+    Path to a previously generated undo JSON file. Restores the registry values
+    and service startup types it recorded. Scheduled tasks, optional features,
+    bcdedit settings and deleted temp files are not covered.
 
 .PARAMETER Force
     Skip per-section confirmation prompts.
@@ -254,7 +256,7 @@ if (-not $DryRun) {
     if ($undoFile) {
         Write-Host ""
         Write-Good "Undo file saved: $undoFile"
-        Write-Host "    Use -Undo `"$undoFile`" to restore all registry changes" -ForegroundColor Gray
+        Write-Host "    Use -Undo `"$undoFile`" to restore the registry values and services it recorded" -ForegroundColor Gray
     }
 }
 

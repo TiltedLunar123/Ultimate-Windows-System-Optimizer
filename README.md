@@ -186,7 +186,24 @@ An undo file is written to the same directory after optimization:
 undo_YYYYMMDD_HHMMSS.json
 ```
 
-This JSON file records the previous value of every registry key that was modified, allowing full rollback with the `-Undo` parameter. The file's ACL is tightened after write so only the current user can read it (the JSON contains enough configuration detail that it shouldn't be world-readable on a shared machine).
+This JSON file records the previous value of every registry key that was modified, plus the startup type and running state of every service that was disabled. `-Undo` puts both back. The file's ACL is tightened after write so only the current user can read it (the JSON contains enough configuration detail that it shouldn't be world-readable on a shared machine).
+
+### What undo does not cover
+
+The undo file is not a full system snapshot, and it is worth knowing where it stops before you rely on it:
+
+| Change | Covered by `-Undo`? | How to reverse it |
+|---|---|---|
+| Registry values | Yes | `-Undo` |
+| Disabled services | Yes | `-Undo` |
+| Disabled scheduled tasks | No | `Enable-ScheduledTask` per task, or the restore point |
+| Disabled optional features | No | `Enable-WindowsOptionalFeature -Online`, or the restore point |
+| `bcdedit` boot timeout | No | `bcdedit /timeout 30` |
+| `fsutil` NTFS settings | No | `fsutil behavior set disablelastaccess 0` |
+| Memory compression | No | `Enable-MMAgent -MemoryCompression` |
+| Deleted temp files and Recycle Bin | No | Not reversible |
+
+The System Restore Point the script creates before it starts covers most of the rows marked no. That is the reason it is created, and the reason it is worth leaving System Restore turned on.
 
 ## Disclaimer
 
