@@ -27,21 +27,22 @@ Describe "Context menu restore is undoable (issue #14)" {
 
     It "records the classic menu key in the undo list on Windows 11" {
         Invoke-ContextMenuOptimization -Analysis @{ OSBuild = 22621 } | Out-Null
-        $entries = @(Get-UndoEntry)
-        $match = $entries | Where-Object { $_.Path -eq $script:ClassicMenuKey -and $_.Name -eq '(Default)' }
-        @($match).Count | Should -Be 1
+        $entries = Get-UndoEntry
+        @($entries | Where-Object { $_.Path -eq $script:ClassicMenuKey -and $_.Name -eq '(Default)' }).Count |
+            Should -Be 1
     }
 
     It "saves it as a String so restore writes the right value type" {
         Invoke-ContextMenuOptimization -Analysis @{ OSBuild = 22621 } | Out-Null
-        $entry = @(Get-UndoEntry) | Where-Object { $_.Path -eq $script:ClassicMenuKey } | Select-Object -First 1
+        $entries = Get-UndoEntry
+        $entry = $entries | Where-Object { $_.Path -eq $script:ClassicMenuKey } | Select-Object -First 1
         $entry.Type | Should -Be 'String'
     }
 
     It "leaves the key alone on Windows 10, where the tweak does not apply" {
         Invoke-ContextMenuOptimization -Analysis @{ OSBuild = 19045 } | Out-Null
-        $entries = @(Get-UndoEntry)
-        ($entries | Where-Object { $_.Path -eq $script:ClassicMenuKey }) | Should -BeNullOrEmpty
+        $entries = Get-UndoEntry
+        @($entries | Where-Object { $_.Path -eq $script:ClassicMenuKey }).Count | Should -Be 0
     }
 
     It "does not count a fix in dry run" {
