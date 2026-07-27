@@ -36,17 +36,15 @@ function Invoke-ContextMenuOptimization {
 
     if ([int]$Analysis.OSBuild -ge 22000) {
         $ctxPath = "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
-        if ($isDry) {
-            Write-Dry "Would restore classic right-click context menu"
+
+        # This used to call New-Item and Set-ItemProperty directly, which meant
+        # the classic-menu key was the one change a run made that undo could not
+        # reverse. Set-RegValue records the prior state first and owns the
+        # dry-run branch, so the write now behaves like every other one here.
+        if (Set-RegValue $ctxPath "(Default)" "" "String") {
+            if (-not $isDry) { Write-Fix "Classic right-click context menu restored (Windows 11)" }
         } else {
-            try {
-                if (-not (Test-Path $ctxPath)) { New-Item -Path $ctxPath -Force | Out-Null }
-                Set-ItemProperty -Path $ctxPath -Name "(Default)" -Value "" -Force
-                Write-Fix "Classic right-click context menu restored (Windows 11)"
-            } catch {
-                Write-Skip "Could not restore classic context menu"
-                Log "[ERROR] Context menu restore: $_"
-            }
+            Write-Skip "Could not restore classic context menu"
         }
     }
 
