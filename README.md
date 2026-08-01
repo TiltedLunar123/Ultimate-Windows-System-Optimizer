@@ -5,28 +5,51 @@
 
 A PowerShell script that analyzes Windows 10/11 systems and applies intelligent, hardware-aware optimizations to improve performance, reduce bloat, harden privacy, and tighten security.
 
-## Features
+## What it does
 
-- **Deep system analysis** - detects CPU, RAM, GPU, SSD/HDD, laptop vs. desktop, and assigns a system tier (Low-End, Mid-Range, High-End)
-- **Health scoring** - calculates a real 0-100 health score before and after optimization
-- **Temp file cleanup** - removes user temp, Windows temp, internet cache, update cache, crash dumps, thumbnail cache, and empties the Recycle Bin. Only files older than 24 hours are touched, so anything from the current session stays put, and it deletes files rather than wiping whole directory trees out from under running apps
-- **Service trimming** - disables telemetry, Xbox, fax, geolocation, and other commonly unnecessary services
-- **Power plan tuning** - activates Ultimate/High Performance on desktops; optimizes AC vs. battery profiles on laptops
-- **Visual effects optimization** - adjusts animations and effects based on system tier
-- **Privacy hardening** - disables telemetry, Cortana, advertising ID, activity history, location tracking, feedback prompts, and silent app installs
-- **Network latency reduction** - disables Nagle's algorithm, optimizes TCP settings, flushes DNS
-- **Gaming tweaks** - enables Game Mode, disables Game DVR, configures GPU scheduling, disables mouse acceleration, and tunes the multimedia scheduler
-- **Explorer improvements** - shows file extensions, disables Bing search in Start Menu, speeds up menus, opens to This PC
-- **SSD-specific tuning** - disables Prefetch/Superfetch, enables TRIM, reduces unnecessary writes
-- **Scheduled task cleanup** - disables compatibility appraiser, CEIP, disk diagnostics, maps updates, and error reporting tasks
-- **Boot optimization** - reduces boot timeout, enables verbose boot messages, and enables Fast Startup only when Windows is the only OS in the boot menu
-- **Security hardening** - disables Remote Desktop, Remote Assistance, SMBv1, and AutoRun; verifies Windows Firewall is enabled
-- **Context-aware safety** - skips changes that would break detected hardware, installed apps, or active sessions (Outlook, Teams, OneNote, RDP, printers, touchscreens, dual-boot setups)
-- **Undo/rollback** - exports all registry changes to a JSON file that can restore previous values
-- **Dry run mode** - preview all changes without modifying anything
-- **Selective optimization** - run only specific sections or skip sections you don't want
-- **Restore point creation** - automatically creates a System Restore Point before making any changes
-- **Detailed logging** - saves a timestamped log file to the desktop
+It looks at the machine first: CPU, RAM, GPU, whether the system disk is an SSD or a
+spinning drive, laptop or desktop. From that it assigns a tier (Low-End, Mid-Range,
+High-End) and scores overall health out of 100. It scores again at the end so you can
+see what actually moved.
+
+Then it works through the usual suspects. Telemetry, Cortana, the advertising ID,
+activity history, location tracking, feedback prompts and silent app installs all get
+switched off. So do the Xbox, fax and geolocation services, and the scheduled tasks
+nobody misses: compatibility appraiser, CEIP, disk diagnostics, maps updates, error
+reporting. On the security side it turns off Remote Desktop, Remote Assistance, SMBv1
+and AutoRun, and checks the firewall is actually on.
+
+Performance work is tier-aware rather than uniform. Visual effects get tuned to what the
+machine can carry. Desktops get the Ultimate or High Performance power plan; laptops get
+separate AC and battery profiles instead. SSDs get Prefetch and Superfetch off, TRIM on,
+and fewer pointless writes. Network settings get Nagle's algorithm disabled, TCP tuned,
+DNS flushed. For games there is Game Mode on, Game DVR off, hardware GPU scheduling,
+mouse acceleration off, and a retuned multimedia scheduler. Explorer gets file
+extensions shown, Bing search out of the Start menu, faster menus, and This PC as the
+landing view.
+
+Cleanup covers user and Windows temp, internet and update caches, crash dumps, the
+thumbnail cache, and the Recycle Bin. Only files more than 24 hours old are touched, so
+whatever the current session is holding onto stays put, and it deletes files rather than
+removing whole directory trees out from under running applications.
+
+Boot gets a shorter timeout and verbose messages. Fast Startup only gets enabled when
+Windows is the only entry in the boot menu, because turning it on next to a Linux
+install is how people lose filesystems.
+
+## Not breaking your machine
+
+This is the part I have spent the most time on. Before each change the script checks
+whether anything on the system depends on what it is about to turn off, and skips it if
+so. Detected printers, touchscreens, Outlook, Teams, OneNote, a live RDP session, a
+dual-boot menu: all of these veto the changes that would break them.
+
+Every registry write is recorded to a JSON file that can put the old values back, and a
+System Restore Point is created before anything is modified. `-DryRun` shows the whole
+plan without touching a thing, and you can run or skip individual sections. A timestamped
+log lands on the desktop.
+
+Run it with `-DryRun` first. I would.
 
 ## Requirements
 

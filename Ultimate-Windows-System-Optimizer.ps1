@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Ultimate Windows System Optimizer v3.1 — automated performance tuning for Windows 10/11.
+    Ultimate Windows System Optimizer v3.1, automated performance tuning for Windows 10/11.
 
 .DESCRIPTION
     Performs deep system analysis and applies intelligent optimizations based on detected
