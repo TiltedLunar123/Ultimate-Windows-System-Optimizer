@@ -128,7 +128,7 @@ If you prefer to clone and run manually:
 | `-DryRun` | Switch | Preview all changes without changing anything. Shows what WOULD happen. |
 | `-Only` | String[] | Run only the specified sections. Example: `-Only "Privacy","Cleanup"` |
 | `-Skip` | String[] | Run all sections except the specified ones. Example: `-Skip "Security","Network"` |
-| `-Undo` | String | Path to a before generated undo JSON file. Restores all registry values. |
+| `-Undo` | String | Path to an undo JSON file from an earlier run. Restores all registry values. |
 | `-Force` | Switch | Skip per-section confirmation prompts. Runs all enabled sections without asking. |
 
 ### Valid Section Names
