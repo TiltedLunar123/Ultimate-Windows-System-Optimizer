@@ -5,6 +5,10 @@
 
 A PowerShell script that analyzes Windows 10/11 systems and applies intelligent, hardware-aware optimizations to improve performance, reduce bloat, harden privacy, and tighten security.
 
+A real `-DryRun` pass, which reports everything and changes nothing:
+
+![Terminal output. A dry run banner says no changes will be made, then Phase 1 deep system analysis reports a laptop running Windows 11 build 26200 on an Intel Core Ultra 9 275HX with 24 cores, 31.4 GB of RAM at 84.2 percent used, and a High-End system tier. Storage analysis shows drive C with 486.8 GB free of 952.4 GB and a healthy NVMe SSD. Junk and temp files come back as 42215.4 MB across 377209 files, marked BLOATED. The system health score is 65 out of 100. Phase 2 begins with a dry-run system restore point.](docs/analysis.png)
+
 ## What it does
 
 It looks at the machine first: CPU, RAM, GPU, whether the system disk is an SSD or a
@@ -45,7 +49,7 @@ so. Detected printers, touchscreens, Outlook, Teams, OneNote, a live RDP session
 dual-boot menu: all of these veto the changes that would break them.
 
 Every registry write is recorded to a JSON file that can put the old values back, and a
-System Restore Point is created before anything is modified. `-DryRun` shows the whole
+System Restore Point is created before anything is changed. `-DryRun` shows the whole
 plan without touching a thing, and you can run or skip individual sections. A timestamped
 log lands on the desktop.
 
@@ -121,10 +125,10 @@ If you prefer to clone and run manually:
 
 | Parameter | Type | Description |
 |---|---|---|
-| `-DryRun` | Switch | Preview all changes without modifying anything. Shows what WOULD happen. |
+| `-DryRun` | Switch | Preview all changes without changing anything. Shows what WOULD happen. |
 | `-Only` | String[] | Run only the specified sections. Example: `-Only "Privacy","Cleanup"` |
 | `-Skip` | String[] | Run all sections except the specified ones. Example: `-Skip "Security","Network"` |
-| `-Undo` | String | Path to a previously generated undo JSON file. Restores all registry values. |
+| `-Undo` | String | Path to a before generated undo JSON file. Restores all registry values. |
 | `-Force` | Switch | Skip per-section confirmation prompts. Runs all enabled sections without asking. |
 
 ### Valid Section Names
@@ -178,7 +182,7 @@ tests/
 
 Each optimization module exports a single `Invoke-*Optimization` function. The analysis module exports `Get-SystemAnalysis` (returns a results hashtable) and `Get-HealthScore` (computes score from results). The undo manager exports `Save-RegistryState`, `Export-UndoFile`, and `Restore-FromUndoFile`.
 
-## What the Script Modifies
+## What the Script Changes
 
 | Category | Examples |
 |---|---|
@@ -209,7 +213,7 @@ An undo file is written to the same directory after optimization:
 undo_YYYYMMDD_HHMMSS.json
 ```
 
-This JSON file records the previous value of every registry key that was modified, plus the startup type and running state of every service that was disabled. `-Undo` puts both back. The file's ACL is tightened after write so only the current user can read it (the JSON contains enough configuration detail that it shouldn't be world-readable on a shared machine).
+This JSON file records the previous value of every registry key that was changed, plus the startup type and running state of every service that was disabled. `-Undo` puts both back. The file's ACL is tightened after write so only the current user can read it (the JSON contains enough configuration detail that it shouldn't be world-readable on a shared machine).
 
 ### What undo does not cover
 
@@ -230,7 +234,7 @@ The System Restore Point the script creates before it starts covers most of the 
 
 ## Disclaimer
 
-**Use at your own risk.** This script modifies Windows settings, services, registry values, scheduled tasks, and system behavior. While it creates a restore point before making changes, there is no guarantee that every system can be restored cleanly or that every optimization is appropriate for every configuration.
+**Use at your own risk.** This script changes Windows settings, services, registry values, scheduled tasks, and system behavior. While it creates a restore point before making changes, there is no guarantee that every system can be restored cleanly or that every optimization is appropriate for every configuration.
 
 Some things to keep in mind:
 
